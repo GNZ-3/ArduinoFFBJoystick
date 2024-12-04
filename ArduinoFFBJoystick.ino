@@ -1,33 +1,27 @@
 // Prcuedure
 // Download Code as ZIP from https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
 // スケッチー＞ライブラリをインクルードー＞ ZIP形式のライブラリをインクルード
-// DigitalWriteFast.hをコピペ
-
-// x,y,z 軸のFFB。FFBを利用しない場合はEffect無し、センサーエラー無効
-
+// DigitalWriteFast.hをコピー
 #include "ArduinoFFBJoystick.h" // This
 #include <Joystick.h>           // https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
-#include "DigitalWriteFast.h"   //Not sure. Original FFB
-#include "BTS7960.h"            // https://github.com/luisllamasbinaburo/Arduino-BTS7960
-#include <AS5600.h>             // https://github.com/RobTillaart/AS5600
-#include <TCA9548.h>            // https://github.com/RobTillaart/TCA9548
-#include <Wire.h> 
+#include "DigitalWriteFast.h"   //
+#include "BTS7960.h"            // Motor Driver: https://github.com/luisllamasbinaburo/Arduino-BTS7960
+#include <AS5600.h>             // Magnet encorder: https://github.com/RobTillaart/AS5600
+#include <TCA9548.h>            // Multiplexor :https://github.com/RobTillaart/TCA9548
 
-// bts7960 3 wireing is the same as SMC3:https://www.xsimulator.net/community/threads/smc3-arduino-3dof-motor-driver-and-windows-utilities.4957/
+#define TOTALAXIS 2
 
 typedef enum axis{
     xaxis=0,
     yaxis=1,
     Zaxis=2,
 };
-#define TOTALAXIS 2
-
 
 // Create magnetic encorder
 AS5600 as5600[TOTALAXIS];
 
-/* PIN for bts7960
-https://www.xsimulator.net/community/threads/smc3-arduino-3dof-motor-driver-and-windows-utilities.4957/
+// create motors
+/* Wireing is the same as SMC3. Please refer to https://www.xsimulator.net/community/threads/smc3-arduino-3dof-motor-driver-and-windows-utilities.4957/
   ENA ----> IN1/RPWM
   ENB --+-> EN1/R_EN
         +-> EN2/L_EN (ie connect ENB to both R_EN and L_EN)
@@ -45,8 +39,6 @@ const int ENBpin3 =7;          // ENB output pin for Motor H-Bridge 3 (ie PortD 
 const int PWMpin1 =9;          // PWM output pin for Motor 1   
 const int PWMpin2 =10;         // PWM output pin for Motor 2    
 const int PWMpin3 =11;         // PWM output pin for Motor 3 
-
-// create motors
 BTS7960 motor[] = {
   BTS7960(ENBpin1, PWMpin1, ENApin1),
   BTS7960(ENBpin2, PWMpin2, ENApin2),
@@ -56,12 +48,10 @@ BTS7960 motor[] = {
 // Create multiplexor
 TCA9548 MP(0x70);
 
-// Create FFB related
+// Create FFB jyoystick
 Gains gains[TOTALAXIS];
 EffectParams effectparams[TOTALAXIS];
 s32 forces[TOTALAXIS] = {0};
-
-//Create joystick
 /*
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   0, 0,                  // No Button count, no Hat Switch count
@@ -70,29 +60,40 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   false, false,          // No rudder or throttle
   false, false, false);    // No accelerator, brake, or steering
 */
-void setup() {
-  ROTATION_MAX=360.0;
-  ROTATION_MID = ROTATION_MAX >> 1; // half
 
+void setup() {
+// Serial initialize and show lib version.
   Serial.begin(115200);
   Serial.println(__FILE__);
+  Serial.print("ARDUINOFFBJOYSTICK_LIB_VERSION: ");
+  Serial.println(ARDUINOFFBJOYSTICK_LIB_VERSION);
   Serial.print("AS5600_LIB_VERSION: ");
   Serial.println(AS5600_LIB_VERSION);
   Serial.print("TCA9548_LIB_VERSION: ");
   Serial.println(TCA9548_LIB_VERSION);
 
+  // Joystick parmeters
+  ROTATION_MAX=360.0;
+  ROTATION_MID = ROTATION_MAX >> 1; // half
+  gains[0].totalGain = 50;  //x axis gain
+  gains[0].springGain = 80;
+  gains[1].totalGain = 50;  //y axis gain
+  gains[1].springGain = 70;
+  gains[2].totalGain = 50;  //z axis ghain
+  gains[2].springGain = 70;
+//gnz  Joystick.setGains(gains);
 
-  // I2C initialize
+  // I2C Multiplexor initialize
   Serial.println("Starting Multiplexor initialization.");
   Wire.begin();
   Wire.setClock(400000);
-  if (MP.begin() == false)
-  {
+  if (MP.begin() == false){
     Serial.println("FAILED to initialize Multiplexor");
   }else{
     Serial.println("Success to initialize Multiplexor");
   }
 
+  // AS5600 is connected through Multiplexor and initialize.
   Serial.println("Starting AS5600 magnet encorder initialization.");
   for(int i=0; i<TOTALAXIS;i++){
     MP.enableChannel(i);
@@ -107,26 +108,16 @@ void setup() {
       Serial.print("FAIL to initilize AS5600 on ch: " + String(i));
     }
     MP.disableChannel(i);
-    delay(100);
+    delay(100);  //Enough time for switching other channel
   }
 
+// BTS7960 motor driver initialize
   Serial.println("Starting BTS7960 motor initialization.");
   for(int i=0; i<TOTALAXIS;i++){
     motor[i].Enable();
     motor[i].Stop();
     Serial.print("Success to initilize motor:" + String(i));
   }
-
-//set Axis gains
-  gains[0].totalGain = 50;  //x axis
-  gains[0].springGain = 80;
-  gains[1].totalGain = 50;  //y axis
-  gains[1].springGain = 70;
-  gains[2].totalGain = 50;  //z axis
-  gains[2].springGain = 70;
-
-//gnz  Joystick.setGains(gains);
-
 //set Timer3
     cli();
     TCCR3A = 0; //set TCCR1A 0
@@ -137,18 +128,18 @@ void setup() {
     TCCR3B |= (1 << CS31); //set CS11 1(8-fold Prescaler)
     TIMSK3 |= (1 << OCIE3A);
     sei();
-
 }
 //ISR
 ISR(TIMER3_COMPA_vect){
-//gnz  Joystick.getUSBPID();
+/*
+  Joystick.getUSBPID();
+*/
 }
 void loop() {
-  //Set Joystick posiion from magnetic encorder
+  //Read magnetic encorder and set Joystick posiion
   s32 position[TOTALAXIS];
   for(int i=0; i<TOTALAXIS;i++){
     position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
-
   }
   /*
   s32 position[0] = as5600[0].getCumulativePosition() - ROTATION_MID;
@@ -165,11 +156,12 @@ void loop() {
   effectparams[1].springPosition = position[1];
   effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
   effectparams[2].springPosition = position[2];
-//  Joystick.setEffectParams(effectparams);
-
-//  Joystick.getForce(forces);
+/*
+  Joystick.setEffectParams(effectparams);
+  Joystick.getForce(forces);
+*/
+// Apply force to motor
   for(int i=0; i<TOTALAXIS;i++){
     (forces[i] > 0)? motor[i].TurnLeft( forces[i] ) : motor[i].TurnRight( -forces[i] );
   }
-
 }

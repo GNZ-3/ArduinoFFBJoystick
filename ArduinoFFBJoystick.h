@@ -2,6 +2,7 @@
 
 #include "Arduino.h"
 #include <Wire.h>
+#define ARDUINOFFBJOYSTICK_LIB_VERSION             (F("0.1.0"))
 //#include "sensors/MagneticSensorI2C.h"
 //#include "SelectableI2CTCA9548A.h"
 
