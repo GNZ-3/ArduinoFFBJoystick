@@ -52,6 +52,7 @@ TCA9548 MP(0x70);
 Gains gains[TOTALAXIS];
 EffectParams effectparams[TOTALAXIS];
 s32 forces[TOTALAXIS] = {0};
+
 /*
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   0, 0,                  // No Button count, no Hat Switch count
@@ -61,8 +62,11 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   false, false, false);    // No accelerator, brake, or steering
 */
 
+unsigned long prev, next, interval;
+
 void setup() {
 // Serial initialize and show lib version.
+delay(5000);
   Serial.begin(115200);
   Serial.println(__FILE__);
   Serial.print("ARDUINOFFBJOYSTICK_LIB_VERSION: ");
@@ -81,20 +85,22 @@ void setup() {
   gains[1].springGain = 70;
   gains[2].totalGain = 50;  //z axis ghain
   gains[2].springGain = 70;
-//gnz  Joystick.setGains(gains);
+/*
+  Joystick.setGains(gains);
+*/
 
   // I2C Multiplexor initialize
-  Serial.println("Starting Multiplexor initialization.");
+  Serial.print("Starting Multiplexor initialization.");
   Wire.begin();
   Wire.setClock(400000);
   if (MP.begin() == false){
-    Serial.println("FAILED to initialize Multiplexor");
+    Serial.println(" FAILED!!");
   }else{
-    Serial.println("Success to initialize Multiplexor");
+    Serial.println(" Success.");
   }
 
   // AS5600 is connected through Multiplexor and initialize.
-  Serial.println("Starting AS5600 magnet encorder initialization.");
+  Serial.print("Starting AS5600 magnet encorder initialization.");
   for(int i=0; i<TOTALAXIS;i++){
     MP.enableChannel(i);
     if( as5600[i].isConnected() ){
@@ -103,21 +109,25 @@ void setup() {
       as5600[i].setSlowFilter(0); // milos, added to configure slow filter or readout precision: 0-best(slowest), 3-worst(fastest)
       as5600[i].setDirection(AS5600_CLOCK_WISE); // For just in case
       as5600[i].resetCumulativePosition(ROTATION_MID); // milos, initialize at 0deg at startup
-      Serial.print("Success to initilize AS5600 on ch:" + String(i));
+      Serial.print(" Success ch:" + String(i));
     }else{
-      Serial.print("FAIL to initilize AS5600 on ch: " + String(i));
+      Serial.print("FAILED ch:" + String(i));
     }
     MP.disableChannel(i);
     delay(100);  //Enough time for switching other channel
   }
+  Serial.println("");
 
 // BTS7960 motor driver initialize
-  Serial.println("Starting BTS7960 motor initialization.");
+  Serial.print("Starting BTS7960 motor initialization.");
   for(int i=0; i<TOTALAXIS;i++){
     motor[i].Enable();
     motor[i].Stop();
-    Serial.print("Success to initilize motor:" + String(i));
+    Serial.print(" Success :" + String(i));
   }
+  Serial.println("");
+  prev=millis();
+  interval = 100;
 //set Timer3
     cli();
     TCCR3A = 0; //set TCCR1A 0
@@ -131,37 +141,41 @@ void setup() {
 }
 //ISR
 ISR(TIMER3_COMPA_vect){
-/*
+/* Please care to remove this
   Joystick.getUSBPID();
 */
 }
 void loop() {
-  //Read magnetic encorder and set Joystick posiion
-  s32 position[TOTALAXIS];
-  for(int i=0; i<TOTALAXIS;i++){
-    position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
-  }
-  /*
-  s32 position[0] = as5600[0].getCumulativePosition() - ROTATION_MID;
-  s32 position[1] = as5600[1].getCumulativePosition() - ROTATION_MID;
-  s32 position[2] = as5600[2].getCumulativePosition() - ROTATION_MID;
-  Joystick.setXAxis( position[0] );
-  Joystick.setYAxis( position[1] );
-  Joystick.setZAxis( position[2] );
-*/
-  //set Axis Spring Effect Param
-  effectparams[0].springMaxPosition = ROTATION_MAX;         //x axis
-  effectparams[0].springPosition = position[0];
-  effectparams[1].springMaxPosition = ROTATION_MAX;         //y axis
-  effectparams[1].springPosition = position[1];
-  effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
-  effectparams[2].springPosition = position[2];
+  unsigned long curr = millis();
+  if ((curr - prev) >= interval) { 
+    prev = curr;
+    //Read magnetic encorder and set Joystick posiion
+    s32 position[TOTALAXIS];
+    for(int i=0; i<TOTALAXIS;i++){
+      MP.enableChannel(i);
+      position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
+      Serial.print("[AS5600 ch:" + String(i) + "=" + String(position[i]) + "] ");
+      MP.disableChannel(i);
+    }
+    //set Axis Spring Effect Param
+    effectparams[0].springMaxPosition = ROTATION_MAX;         //x axis
+    effectparams[0].springPosition = position[0];
+    effectparams[1].springMaxPosition = ROTATION_MAX;         //y axis
+    effectparams[1].springPosition = position[1];
+    effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
+    effectparams[2].springPosition = position[2];
 /*
-  Joystick.setEffectParams(effectparams);
-  Joystick.getForce(forces);
-*/
-// Apply force to motor
-  for(int i=0; i<TOTALAXIS;i++){
-    (forces[i] > 0)? motor[i].TurnLeft( forces[i] ) : motor[i].TurnRight( -forces[i] );
+    Joystick.setXAxis( position[0] );
+    Joystick.setYAxis( position[1] );
+    Joystick.setZAxis( position[2] );
+    Joystick.setEffectParams(effectparams);
+    Joystick.getForce(forces);
+    */
+  // Apply force to motor
+    for(int i=0; i<TOTALAXIS;i++){
+      (forces[i] > 0)? motor[i].TurnLeft( forces[i] ) : motor[i].TurnRight( -forces[i] );
+      Serial.print("[Force:" + String(i) + "=" + String(forces[i]) + "] ");
+    }
+    Serial.println("");
   }
 }
