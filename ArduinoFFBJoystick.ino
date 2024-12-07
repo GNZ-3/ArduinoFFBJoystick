@@ -93,23 +93,23 @@ void setup() {
 
 // Joystick initialize
   Serial.print("Starting Joystick initialization.");
-  ROTATION_MAX=360.0;
-  ROTATION_MID = ROTATION_MAX >> 1; // half
-  gains[0].totalGain = 50;  //x axis gain
-  gains[0].springGain = 80;
-  gains[1].totalGain = 50;  //y axis gain
+  ROTATION_MAX=ENCODER_MAX_VALUE;
+  //ROTATION_MID = ROTATION_MAX >> 1; // half
+  ROTATION_MID = 0;
+  gains[0].totalGain = 100;  //x axis gain
+  gains[0].springGain = 100;
+  gains[1].totalGain = 100;  //y axis gain
   gains[1].springGain = 70;
-  gains[2].totalGain = 50;  //z axis ghain
+  gains[2].totalGain = 100;  //z axis ghain
   gains[2].springGain = 70;
   Joystick.setGains(gains);
-  Joystick.setRyAxisRange(0, 500);
-  Joystick.setRxAxisRange(0, 500);
-  Joystick.setYAxisRange(0, 500);
   Joystick.setXAxisRange(ENCODER_MIN_VALUE, ENCODER_MAX_VALUE);
+  Joystick.setYAxisRange(ENCODER_MIN_VALUE, ENCODER_MAX_VALUE);
+  Joystick.setYAxisRange(ENCODER_MIN_VALUE, ENCODER_MAX_VALUE);
   Joystick.begin(true);
   Serial.print("\tSuccess");
 
-  prev=millis();
+  prev = millis();
 
 //set Timer3
     cli();
@@ -135,8 +135,9 @@ void loop() {
     s32 position[TOTALAXIS];
     for(int i=0; i<TOTALAXIS;i++){
       MP.enableChannel(i);
-      //position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
-      position[i] = as5600[i].getCumulativePosition();
+      position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
+      //position[i] = as5600[i].readAngle();
+
       Serial.print("Encrdr ");
       Serial.print(i);
       Serial.print(":");
@@ -145,18 +146,18 @@ void loop() {
       MP.disableChannel(i);
     }
     //set Axis Spring Effect Param
-    effectparams[0].springMaxPosition = ROTATION_MAX;         //x axis
+    effectparams[0].springMaxPosition = 400;         //x axis
     effectparams[0].springPosition = position[0];
     effectparams[1].springMaxPosition = ROTATION_MAX;         //y axis
-    effectparams[1].springPosition = position[1];
-  //  effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
-  //  effectparams[2].springPosition = position[2];
+    //effectparams[1].springPosition = position[1];
+    effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
+    //effectparams[2].springPosition = position[2];
     Joystick.setEffectParams(effectparams);
 
 
     Joystick.setXAxis( position[0] );
     Joystick.setYAxis( position[1] );
-//    Joystick.setZAxis( position[2] );
+    Joystick.setZAxis( position[2] );
 
 
     Joystick.getForce(forces);
