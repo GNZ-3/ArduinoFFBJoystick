@@ -1,72 +1,49 @@
-// Prcuedure
+// If you already installed Joystick library, uninstall it
 // Download Code as ZIP from https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
-// スケッチー＞ライブラリをインクルードー＞ ZIP形式のライブラリをインクルード
+// Sketch->library-Install from zip to install downloaded
 // DigitalWriteFast.hをコピー
+
 #include "ArduinoFFBJoystick.h" // This
-#include <Joystick.h>           // https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
 #include "DigitalWriteFast.h"   //
-#include "BTS7960.h"            // Motor Driver: https://github.com/luisllamasbinaburo/Arduino-BTS7960
+#include <Joystick.h>           // https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
+#include "BTS7960.h"            // Motor Driver:    https://github.com/luisllamasbinaburo/Arduino-BTS7960
 #include <AS5600.h>             // Magnet encorder: https://github.com/RobTillaart/AS5600
-#include <TCA9548.h>            // Multiplexor :https://github.com/RobTillaart/TCA9548
+#include <TCA9548.h>            // I2C Multiplexor: https://github.com/RobTillaart/TCA9548
 
-#define TOTALAXIS 2
+#define TOTALAXIS 2 //Role, elevetor,yaw
+#define LOOPINTERVAL 100  //100ms
 
-typedef enum axis{
-    xaxis=0,
-    yaxis=1,
-    Zaxis=2,
-};
+// Create multiplexor
+TCA9548 MP(MPDEFAULTADDRESS);
 
 // Create magnetic encorder
 AS5600 as5600[TOTALAXIS];
 
-// create motors
-/* Wireing is the same as SMC3. Please refer to https://www.xsimulator.net/community/threads/smc3-arduino-3dof-motor-driver-and-windows-utilities.4957/
-  ENA ----> IN1/RPWM
-  ENB --+-> EN1/R_EN
-        +-> EN2/L_EN (ie connect ENB to both R_EN and L_EN)
-  PWM ----> IN2/L_PWM
-https://github.com/luisllamasbinaburo/Arduino-BTS7960#usage
-  BTS7960 motor1(L_EN, R_EN, L_PWM, R_PWM);
-      ----> BTS7960 motor1(ENB, PWM, ENA);
-*/
-const int ENApin1 =2;          // ENA output pin for Motor H-Bridge 1 (ie PortD bit position) 
-const int ENBpin1 =3;          // ENB output pin for Motor H-Bridge 1 (ie PortD bit position)
-const int ENApin2 =4;          // ENA output pin for Motor H-Bridge 2 (ie PortD bit position)
-const int ENBpin2 =5;          // ENB output pin for Motor H-Bridge 2 (ie PortD bit position)
-const int ENApin3 =6;          // ENA output pin for Motor H-Bridge 3 (ie PortD bit position)
-const int ENBpin3 =7;          // ENB output pin for Motor H-Bridge 3 (ie PortD bit position)
-const int PWMpin1 =9;          // PWM output pin for Motor 1   
-const int PWMpin2 =10;         // PWM output pin for Motor 2    
-const int PWMpin3 =11;         // PWM output pin for Motor 3 
+// create motors Each pin is defined in ArduinoFFBJoystick.h
 BTS7960 motor[] = {
   BTS7960(ENBpin1, PWMpin1, ENApin1),
   BTS7960(ENBpin2, PWMpin2, ENApin2),
   BTS7960(ENBpin3, PWMpin3, ENApin3)
 };
 
-// Create multiplexor
-TCA9548 MP(0x70);
-
 // Create FFB jyoystick
+s32 forces[TOTALAXIS] = {0};
 Gains gains[TOTALAXIS];
 EffectParams effectparams[TOTALAXIS];
-s32 forces[TOTALAXIS] = {0};
 
-/*
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
-  0, 0,                  // No Button count, no Hat Switch count
+  8, 0,                  // No Button count, no Hat Switch count
   true, true, true,     // X and Y, but no Z Axis
   false, false, false,   //  Rx, Ry, no Rz
   false, false,          // No rudder or throttle
   false, false, false);    // No accelerator, brake, or steering
-*/
 
-unsigned long prev, next, interval;
+// Other parms
+unsigned long prev, next;
 
 void setup() {
 // Serial initialize and show lib version.
-delay(5000);
+  delay(5000);
   Serial.begin(115200);
   Serial.println(__FILE__);
   Serial.print("ARDUINOFFBJOYSTICK_LIB_VERSION: ");
@@ -75,19 +52,6 @@ delay(5000);
   Serial.println(AS5600_LIB_VERSION);
   Serial.print("TCA9548_LIB_VERSION: ");
   Serial.println(TCA9548_LIB_VERSION);
-
-  // Joystick parmeters
-  ROTATION_MAX=360.0;
-  ROTATION_MID = ROTATION_MAX >> 1; // half
-  gains[0].totalGain = 50;  //x axis gain
-  gains[0].springGain = 80;
-  gains[1].totalGain = 50;  //y axis gain
-  gains[1].springGain = 70;
-  gains[2].totalGain = 50;  //z axis ghain
-  gains[2].springGain = 70;
-/*
-  Joystick.setGains(gains);
-*/
 
   // I2C Multiplexor initialize
   Serial.print("Starting Multiplexor initialization.");
@@ -126,8 +90,27 @@ delay(5000);
     Serial.print(" Success :" + String(i));
   }
   Serial.println("");
+
+// Joystick initialize
+  Serial.print("Starting Joystick initialization.");
+  ROTATION_MAX=360.0;
+  ROTATION_MID = ROTATION_MAX >> 1; // half
+  gains[0].totalGain = 50;  //x axis gain
+  gains[0].springGain = 80;
+  gains[1].totalGain = 50;  //y axis gain
+  gains[1].springGain = 70;
+  gains[2].totalGain = 50;  //z axis ghain
+  gains[2].springGain = 70;
+  Joystick.setGains(gains);
+  Joystick.setRyAxisRange(0, 500);
+  Joystick.setRxAxisRange(0, 500);
+  Joystick.setYAxisRange(0, 500);
+  Joystick.setXAxisRange(ENCODER_MIN_VALUE, ENCODER_MAX_VALUE);
+  Joystick.begin(true);
+  Serial.print("\tSuccess");
+
   prev=millis();
-  interval = 100;
+
 //set Timer3
     cli();
     TCCR3A = 0; //set TCCR1A 0
@@ -141,20 +124,24 @@ delay(5000);
 }
 //ISR
 ISR(TIMER3_COMPA_vect){
-/* Please care to remove this
   Joystick.getUSBPID();
-*/
 }
+
 void loop() {
   unsigned long curr = millis();
-  if ((curr - prev) >= interval) { 
+  if ((curr - prev) >= LOOPINTERVAL) { 
     prev = curr;
     //Read magnetic encorder and set Joystick posiion
     s32 position[TOTALAXIS];
     for(int i=0; i<TOTALAXIS;i++){
       MP.enableChannel(i);
-      position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
-      Serial.print("[AS5600 ch:" + String(i) + "=" + String(position[i]) + "] ");
+      //position[i] = as5600[i].getCumulativePosition() - ROTATION_MID;
+      position[i] = as5600[i].getCumulativePosition();
+      Serial.print("Encrdr ");
+      Serial.print(i);
+      Serial.print(":");
+      Serial.print(position[i]);
+      Serial.print("\t");
       MP.disableChannel(i);
     }
     //set Axis Spring Effect Param
@@ -162,19 +149,28 @@ void loop() {
     effectparams[0].springPosition = position[0];
     effectparams[1].springMaxPosition = ROTATION_MAX;         //y axis
     effectparams[1].springPosition = position[1];
-    effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
-    effectparams[2].springPosition = position[2];
-/*
+  //  effectparams[2].springMaxPosition = ROTATION_MAX;         //z axis
+  //  effectparams[2].springPosition = position[2];
+    Joystick.setEffectParams(effectparams);
+
+
     Joystick.setXAxis( position[0] );
     Joystick.setYAxis( position[1] );
-    Joystick.setZAxis( position[2] );
-    Joystick.setEffectParams(effectparams);
+//    Joystick.setZAxis( position[2] );
+
+
     Joystick.getForce(forces);
-    */
-  // Apply force to motor
+
+     
+      // Apply force to motor
     for(int i=0; i<TOTALAXIS;i++){
-      (forces[i] > 0)? motor[i].TurnLeft( forces[i] ) : motor[i].TurnRight( -forces[i] );
-      Serial.print("[Force:" + String(i) + "=" + String(forces[i]) + "] ");
+   //   (forces[i] > 0)? motor[i].TurnLeft( forces[i] ) : motor[i].TurnRight( -forces[i] );
+      //Serial.print("[Force:" + String(i) + "=" + String(forces[i]) + "] ");
+      Serial.print("Force ");
+      Serial.print(i);
+      Serial.print(":");
+      Serial.print(forces[i]);
+      Serial.print("\t");
     }
     Serial.println("");
   }
