@@ -1,10 +1,21 @@
 // Update board ID:%userprofile%\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.6
+// 起動時に各軸をキャリブレーション、GUIの追加
+// X軸詳細化(タイミングプーリ購入）
+// カルマンフィルタの追加
+// センタスプリングの追加（ツール起動だけでOK?）
+// パラメータチューニング（スプリング強度、フリクション、センター）用の切替スイッチと調整用ロータリーエンコーダの追加
 #include <digitalWriteFast.h>
 #include "Joystick.h"           //FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
 #include "BTS7960.h"            // Motor Driver:    https://github.com/luisllamasbinaburo/Arduino-BTS7960
+//https://github.com/greiman/SSD1306Ascii
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiAvrI2c.h"
+#define I2C_ADDRESS 0x3C
+SSD1306AsciiAvrI2c oled;
+
 #define BTS7960_ENA_1   7       //X motor
-#define BTS7960_LPWM_1  6
-#define BTS7960_RPWM_1  5
+#define BTS7960_LPWM_1  6       //CCW
+#define BTS7960_RPWM_1  11      //Pin 5 (and 3) did not work. Try another pin 11
 #define BTS7960_ENA_2   8       //Y motor
 #define BTS7960_LPWM_2  9
 #define BTS7960_RPWM_2  10
@@ -18,11 +29,11 @@ EffectParams effectparams[2];   // For FFB
 int32_t valuex = 0;             // Read from encorder X
 int32_t valuey = 0;             // Read from encorder y
 int32_t valuez = 0;             // Read from encorder z
-int32_t valueminx = 590;        // Min HW limit for Encorder x
-int32_t valuemaxx = 730;        // Max HW limit for encorder X
+int32_t valueminx = 340;        // Min HW limit for Encorder x
+int32_t valuemaxx = 740;        // Max HW limit for encorder X
 int32_t valuecenx = (valuemaxx+valueminx)/2; 
-int32_t valueminy = 300;        // Min HW limit for Encorder y
-int32_t valuemaxy = 700;        // Max HW limit for encorder y
+int32_t valueminy = 170;        // Min HW limit for Encorder y
+int32_t valuemaxy = 570;        // Max HW limit for encorder y
 int32_t valueceny = (valuemaxy+valueminy)/2;
 int32_t valueminz = 60;        // Min HW limit for Encorder z
 int32_t valuemaxz = 260;        // Max HW limit for encorder z
@@ -44,6 +55,7 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
 
 void setup() {
   Serial.begin(115200);
+  oled.begin(&Adafruit128x64, I2C_ADDRESS);
   pinMode(A0, INPUT_PULLUP);  //Set pin mode for Encorder X
   pinMode(A1, INPUT_PULLUP);  //Set pin mode for Encorder y
   pinMode(A2, INPUT_PULLUP);  //Set pin mode for Encorder z
