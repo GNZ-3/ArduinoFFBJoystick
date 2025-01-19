@@ -27,16 +27,15 @@ Gains gains[NUMBER_OF_AXIS];                    // For FFB
 EffectParams effectparams[NUMBER_OF_AXIS];      // For FFB
 int32_t forces[NUMBER_OF_AXIS]     = {0,0,0};   // Force value for servo motor
 int32_t value[NUMBER_OF_AXIS]      = {0,0,0};   // Encorder value
-int32_t valuemin[NUMBER_OF_AXIS]   = {460, 170, 60};  //Joystick HW limit
-int32_t valuemax[NUMBER_OF_AXIS]   = {860, 570, 260}; //Joystick HW limit
+int32_t valuemin[NUMBER_OF_AXIS]   = {250, 430, 60};  //Joystick HW limit
+int32_t valuemax[NUMBER_OF_AXIS]   = {550, 730, 260}; //Joystick HW limit
 int32_t valuecen[NUMBER_OF_AXIS]   = { (valuemax[0]+valuemin[0])/2,(valuemax[1]+valuemin[1])/2,(valuemax[2]+valuemin[2])/2};  //Jostick center
-bool outofrange[NUMBER_OF_AXIS]    = {false,false,false}; //Joystick reached HW limit
-int32_t forcemax[NUMBER_OF_AXIS]   = {20,20,20};  //FFB torque
-int32_t forcelimit[NUMBER_OF_AXIS] = {50,50,50};  //Reverse torque if joystick is out of HW limit 
+int16_t outofrange[NUMBER_OF_AXIS] = {0,0,0}; //Joystick reached HW limit
+int32_t forcemax[NUMBER_OF_AXIS]   = {63,63,20};  //FFB torque
+int32_t forcelimit[NUMBER_OF_AXIS] = {127,127,50};  //Reverse torque if joystick is out of HW limit 
 char analogpin[NUMBER_OF_AXIS]     = {A0,A1,A2};  // Encorder PIN
 
-//Create LCD
-SSD1306AsciiAvrI2c oled;
+
 
 // create servo motor
 BTS7960 motor[] = {
@@ -53,7 +52,7 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
 
 void setup() {
   Serial.begin(115200);
-  oled.begin(&Adafruit128x64, I2C_ADDRESS);
+
 
   pinMode(analogpin[0], INPUT_PULLUP);  //Set pin mode for Encorder X
   pinMode(analogpin[1], INPUT_PULLUP);  //Set pin mode for Encorder y
@@ -93,15 +92,20 @@ void loop() {
     proc = constrain(value[i], valuemin[i], valuemax[i]);
     outofrange[i] = (value[i] != proc);
     */
-    if( value[i] > valuemax[i] ){
+    int diff;
+    diff = value[i] - valuemax[i];
+    outofrange[i] = 0;
+    if( diff > 0 ){
       proc = ENCODER_MAX;
-      outofrange[i] = true; 
-    }else if( value[i] < valuemin[i] ){
+      outofrange[i] = sqrt(diff)*20 + forcemax[i]; 
+    }
+    diff = valuemin[i] - value[i];
+    if( diff > 0 ){
       proc = ENCODER_MIN;
-      outofrange[i] = true; 
-    }else{
+      outofrange[i] = sqrt(diff)*20 + forcemax[i];
+    }
+    if(outofrange[i] ==0 ){
       proc = map( value[i],valuemin[i],valuemax[i],ENCODER_MIN,ENCODER_MAX );
-      outofrange[i] = false;
     }    
     Serial.print( " (" + String(proc) + ")" ); 
     effectparams[i].springMaxPosition = ENCODER_MAX; 
@@ -120,10 +124,10 @@ void loop() {
 
 //Apply force to each motor.
   for(int i=0; i<NUMBER_OF_AXIS;i++){
-    int myforce;
+    int16_t myforce;
     if( outofrange[i] ){
-      myforce = forcelimit[i];
-      (value[i] > 0)? motor[i].TurnLeft( myforce ) : motor[i].TurnRight( myforce );
+      myforce = (outofrange[i]>255)?255:outofrange[i];
+      (value[i] - valuecen[i] > 0)? motor[i].TurnRight( myforce ) : motor[i].TurnLeft( myforce );
       Serial.print("\t[Limit:" + String(i) + "=" + String(value[i]) + "\tApply=" + String(myforce) + "] ");
     } else {
       myforce = map( abs(forces[i]),0,255,0,forcemax[i] );
@@ -133,4 +137,3 @@ void loop() {
   }
   Serial.println("");
 }
-
