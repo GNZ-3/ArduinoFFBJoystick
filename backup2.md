@@ -27,15 +27,13 @@ Gains gains[NUMBER_OF_AXIS];                    // For FFB
 EffectParams effectparams[NUMBER_OF_AXIS];      // For FFB
 int32_t forces[NUMBER_OF_AXIS]     = {0,0,0};   // Force value for servo motor
 int32_t value[NUMBER_OF_AXIS]      = {0,0,0};   // Encorder value
-int32_t valuemin[NUMBER_OF_AXIS]   = {250, 430, 60};  //Joystick HW limit
-int32_t valuemax[NUMBER_OF_AXIS]   = {550, 730, 260}; //Joystick HW limit
-int32_t valuecen[NUMBER_OF_AXIS]   = { (valuemax[0]+valuemin[0])/2,(valuemax[1]+valuemin[1])/2,(valuemax[2]+valuemin[2])/2};  //Jostick center
+int32_t valuecen[NUMBER_OF_AXIS]   = {353,646,160};  //Jostick center
+int32_t valuemin[NUMBER_OF_AXIS]   = {valuecen[0]-150,valuecen[1]-200,valuecen[2]-100};  //Joystick HW limit
+int32_t valuemax[NUMBER_OF_AXIS]   = {valuecen[0]+150,valuecen[1]+200, valuecen[2]+100}; //Joystick HW limit
 int16_t outofrange[NUMBER_OF_AXIS] = {0,0,0}; //Joystick reached HW limit
 int32_t forcemax[NUMBER_OF_AXIS]   = {63,63,20};  //FFB torque
 int32_t forcelimit[NUMBER_OF_AXIS] = {127,127,50};  //Reverse torque if joystick is out of HW limit 
 char analogpin[NUMBER_OF_AXIS]     = {A0,A1,A2};  // Encorder PIN
-
-
 
 // create servo motor
 BTS7960 motor[] = {
@@ -92,41 +90,46 @@ void loop() {
     proc = constrain(value[i], valuemin[i], valuemax[i]);
     outofrange[i] = (value[i] != proc);
     */
-    int diff;
-    diff = value[i] - valuemax[i];
     outofrange[i] = 0;
-    if( diff > 0 ){
+    if( value[i] > valuemax[i] ){
       proc = ENCODER_MAX;
-      outofrange[i] = sqrt(diff)*20 + forcemax[i]; 
+      outofrange[i] = value[i] - valuemax[i]; 
     }
-    diff = valuemin[i] - value[i];
-    if( diff > 0 ){
+    if( value[i] < valuemin[i]  ){
       proc = ENCODER_MIN;
-      outofrange[i] = sqrt(diff)*20 + forcemax[i];
+      outofrange[i] = valuemin[i] - value[i];
     }
-    if(outofrange[i] ==0 ){
+    if(outofrange[i] == 0 ){
       proc = map( value[i],valuemin[i],valuemax[i],ENCODER_MIN,ENCODER_MAX );
     }    
-    Serial.print( " (" + String(proc) + ")" ); 
-    effectparams[i].springMaxPosition = ENCODER_MAX; 
-    effectparams[i].springPosition = proc;
+    Serial.print( "\t" + String(proc) ); 
     switch (i) {
       case 0:
+        effectparams[i].springMaxPosition = ENCODER_MAX; 
+        effectparams[i].springPosition = proc;
         Joystick.setXAxis(proc);
+        break;  //Removing this cause some unexpectedvaiable change. Someimtes Leonald won't boot any more.
       case 1:
+        effectparams[i].springMaxPosition = ENCODER_MAX; 
+        effectparams[i].springPosition = proc;
         Joystick.setYAxis(proc);
+        break;
       case 2:
         Joystick.setZAxis(proc);
+        break;
     }
   }
   Joystick.setEffectParams(effectparams);
   Joystick.getForce(forces);
 
 //Apply force to each motor.
-  for(int i=0; i<NUMBER_OF_AXIS;i++){
+  for(int i=0; i<NUMBER_OF_AXIS-1;i++){
     int16_t myforce;
-    if( outofrange[i] ){
-      myforce = (outofrange[i]>255)?255:outofrange[i];
+    if( outofrange[i] > 0 ){
+      //myforce = (outofrange[i]>255)?255:outofrange[i];
+      myforce = forcemax[i] + pow(outofrange[i],2); 
+      if(myforce > 255) myforce=255;
+
       (value[i] - valuecen[i] > 0)? motor[i].TurnRight( myforce ) : motor[i].TurnLeft( myforce );
       Serial.print("\t[Limit:" + String(i) + "=" + String(value[i]) + "\tApply=" + String(myforce) + "] ");
     } else {

@@ -7,7 +7,6 @@
 #include "BTS7960.h"           // Motor Driver: https://github.com/luisllamasbinaburo/Arduino-BTS7960
 //#include "SSD1306Ascii.h"       // LCD Driver:   https://github.com/greiman/SSD1306Ascii
 #include "SSD1306AsciiAvrI2c.h"  // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-// #include <Adafruit_CAP1188.h>   // CAP1188 key: https://github.com/adafruit/Adafruit_CAP1188_Library/tree/master
 // PIN definition
 #define BTS7960_ENA_1   7     // Enable for X motor
 #define BTS7960_LPWM_1  6     // Left PWM for X motor
@@ -37,14 +36,13 @@ int16_t outofrange[NUMBER_OF_AXIS] = {0,0,0};           //Joystick reached HW li
 int32_t forcemax[NUMBER_OF_AXIS]   = { 100, 100, 100 }; // FFB max torque
 char    analogpin[NUMBER_OF_AXIS]  = { A0, A1, A2 };    // x, y  and Z encorder analog input PIN
 char    axisname[NUMBER_OF_AXIS]   = { 'x', 'y', 'z' }; // Axis name to display in LCD
-bool    button1;
-bool    button2;
-
+bool    button1                    = LOW;               // Button 1 is not press.
+bool    button2                    = LOW;               // Button 2 is not press.
+long    button1lastchange;
+long    button2lastchange;
+long    cooldelay                  = 50;                // 50ms button chattaring period
 //Create LCD instance
 SSD1306AsciiAvrI2c oled;
-
-// Create touch key instance
-// Adafruit_CAP1188 cap = Adafruit_CAP1188(CAP1188_RESET);
 
 // create servo motor instance
 BTS7960 motor[] = {
@@ -61,7 +59,7 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID, JOYSTICK_TYPE_JOYSTICK,
                    false, false, false);  // No accelerator, brake, or steering
 
 void setup() {
-  delay(500);
+  delay(1000);
   Serial.begin(115200);
   oled.begin(&Adafruit128x64, I2C_ADD_SSD1306);
   oled.clear();
@@ -80,15 +78,13 @@ void setup() {
   motor[1].Enable();  // just in case.
 
   Serial.println("Calibration process started.");
-//  bool calibValid - true;
   LoadCalibrationdata();
   oled.println("\nCalibration ?");
   int timeout = millis() + 100000; //10 sec
   clearbuttonstate();
   while( timeout < millis() ){
     updatebuttonstate();
-    if( button1 || button2 ){
-      //calibValid = false;
+    if( button1==LOW || button2==LOW ){
       clearCalibrationData();
       break;
     }
@@ -96,18 +92,19 @@ void setup() {
   while( ! validcalibrationdata() ){
     calibration();
   }
-  oled.println("Done Calib.");
+  oled.println("Calib completed.");
   SaveCalibrationdata();
-  delay(3000);
 
+// Set joystick parmeter and bigin
   Joystick.setXAxisRange(ENCODER_MIN, ENCODER_MAX);
   Joystick.setYAxisRange(ENCODER_MIN, ENCODER_MAX);
   Joystick.setZAxisRange(ENCODER_MIN, ENCODER_MAX);
   Joystick.setGains(gains);
   Joystick.begin(true);
-  oled.println("Initilize complete.");
+
+  oled.println("Init complete.");
   Serial.println("Init complete.");
-  delay(1000);
+  delay(3000);
   oled.clear();
 
   // Get game FFB data from USB
@@ -127,29 +124,52 @@ ISR(TIMER3_COMPA_vect) {
 }
 
 void updatebuttonstate(void){
-  if( digitalRead(BUTTON1) == LOW)  button1=true;
-  if( digitalRead(BUTTON2) == LOW)  button2=true;
+  if(millis() > button1lastchange + cooldelay ){
+    int buttonread = digitalRead(BUTTON1);
+    if( buttonread != button1){
+      button1 = buttonread;
+      button1lastchange = millis();
+    }
+  }
+  if(millis() > button2lastchange + cooldelay ){
+    int buttonread = digitalRead(BUTTON2);
+    if( buttonread != button2){
+      button2 = buttonread;
+      button2lastchange = millis();
+    }
+  }
 }
 
 void clearbuttonstate(void){
-    button1=false;
-    button2=false;
-}
-
-void BtnRelease(int timeout){
-  long starttime = millis();
-  while( millis() < starttime + timeout && digitalRead(BUTTON1) != HIGH && digitalRead(BUTTON2) != HIGH){
-    delay(10);
+  while( digitalRead(BUTTON1)==LOW || digitalRead(BUTTON2)==LOW ){
+    delay(cooldelay);
   }
+  button1=HIGH;
+  button2=HIGH;
 }
 
 bool validcalibrationdata(void) {
   for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-    if (valuecen[i] == 0) return false;
-    if (valuemin[i] == 0) return false;
-    if (valuemax[i] == 0) return false;
-    if (valuecen[i] <= valuemin[i]) return false;
-    if (valuecen[i] >= valuemax[i]) return false;
+    if (valuecen[i] == 0){
+      Serial.println("Validation failed. Center value is 0.");
+      return false;
+    }
+    if (valuemin[i] == 0){
+      Serial.println("Validation failed. Min value is 0.");
+      return false;
+    }
+    if (valuemax[i] == 0){
+      Serial.println("Validation failed. Max value is 0.");
+      return false;
+    }
+    if (valuecen[i] <= valuemin[i]){
+      Serial.println("Validation failed. Center below than Min.");
+      return false;
+    }
+    if (valuecen[i] >= valuemax[i]){
+      Serial.println("Validation failed. Center grator than Max.");
+      return false;
+    }
   }
   return true;
 }
@@ -170,27 +190,27 @@ void SaveCalibrationdata(){
 
 //Call from setup() to set joystick parms
 void calibration() {
-  int readval[NUMBER_OF_AXIS];
+  Serial.println("calibration process start.");
+//  int readval[NUMBER_OF_AXIS];
   oled.clear();
-  Serial.println("LCD cleanred.");
   oled.println("Center joystick. ");
   Serial.println("Calibration center started.");
-  while(true){
+  clearbuttonstate();
+  while( button1==HIGH && button2==HIGH ){
     oled.setCol(0);
     oled.clearToEOL();
     for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-      readval[i] = analogRead(analogpin[i]);
-      oled.print(readval[i]);
+      valuecen[i] = analogRead(analogpin[i]);
+      oled.print(valuecen[i]);
       oled.print(" / ");
     }
     updatebuttonstate();
-    if( button1 || button2 ){
+/*    if( button1 || button2 ){
       for (int i = 0; i < NUMBER_OF_AXIS; i++) {
         valuecen[i] = readval[i];
       }
-      clearbuttonstate();
       break;
-    }
+    }*/
   }
   Serial.println("Calibration center completed.");
   oled.clear();
@@ -209,17 +229,13 @@ void calibration() {
 
 }
 
-void arraycopy(int* src, int* dst, int len) {
-    memcpy(dst, src, sizeof(src[0])*len);
-}
-
 void loop() {
   oled.home();
   for (int i = 0; i < NUMBER_OF_AXIS; i++) {
     int proc = 0;
     value[i] = analogRead(analogpin[i]);
     Serial.print("\tEnc" + String(i) + ":");
-    Serial.print(value[i]);
+    //Serial.print(value[i]);
     oled.print(axisname[i]);
     oled.print(":");
     oled.println(value[i]);
@@ -239,10 +255,13 @@ void loop() {
     switch (i) {
       case 0:
         Joystick.setXAxis(proc);
+        break;
       case 1:
         Joystick.setYAxis(proc);
+        break;
       case 2:
         Joystick.setZAxis(proc);
+        break;
     }
   }
   Joystick.setEffectParams(effectparams);

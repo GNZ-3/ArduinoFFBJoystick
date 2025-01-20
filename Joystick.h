@@ -62,7 +62,7 @@
 #define DEG_TO_RAD              ((float)((float)3.14159265359 / 180.0))
 
 struct Gains{
-    uint8_t totalGain         = FORCE_FEEDBACK_MAXGAIN;
+  uint8_t totalGain         = FORCE_FEEDBACK_MAXGAIN;
 	uint8_t constantGain      = FORCE_FEEDBACK_MAXGAIN;
 	uint8_t rampGain          = FORCE_FEEDBACK_MAXGAIN;
 	uint8_t squareGain        = FORCE_FEEDBACK_MAXGAIN;
@@ -175,7 +175,7 @@ public:
 	Joystick_(
 		uint8_t hidReportId = JOYSTICK_DEFAULT_REPORT_ID,
 		uint8_t joystickType = JOYSTICK_TYPE_JOYSTICK,
-        uint8_t buttonCount = JOYSTICK_DEFAULT_BUTTON_COUNT,
+    uint8_t buttonCount = JOYSTICK_DEFAULT_BUTTON_COUNT,
 		uint8_t hatSwitchCount = JOYSTICK_DEFAULT_HATSWITCH_COUNT,
 		bool includeXAxis = true,
 		bool includeYAxis = true,
