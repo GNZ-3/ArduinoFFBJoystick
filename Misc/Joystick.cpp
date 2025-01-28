@@ -19,7 +19,7 @@
 */
 
 #include "Joystick.h"
-#include "FFBDescriptor.h"
+#include <DynamicHID.h>
 #if defined(_USING_DYNAMIC_HID)
 
 #define JOYSTICK_REPORT_ID_INDEX 7
@@ -46,7 +46,7 @@ unsigned int timecnt = 0;
 Joystick_::Joystick_(
 	uint8_t hidReportId,
 	uint8_t joystickType,
-    uint8_t buttonCount,
+  uint8_t buttonCount,
 	uint8_t hatSwitchCount,
 	bool includeXAxis,
 	bool includeYAxis,
@@ -60,11 +60,11 @@ Joystick_::Joystick_(
 	bool includeBrake,
 	bool includeSteering)
 {
-    // Set the USB HID Report ID
-    _hidReportId = hidReportId;
+  // Set the USB HID Report ID
+  _hidReportId = hidReportId;
 
-    // Save Joystick Settings
-    _buttonCount = buttonCount;
+  // Save Joystick Settings
+  _buttonCount = buttonCount;
 	_hatSwitchCount = hatSwitchCount;
 	_includeAxisFlags = 0;
 	_includeAxisFlags |= (includeXAxis ? JOYSTICK_INCLUDE_X_AXIS : 0);
@@ -80,7 +80,7 @@ Joystick_::Joystick_(
 	_includeSimulatorFlags |= (includeBrake ? JOYSTICK_INCLUDE_BRAKE : 0);
 	_includeSimulatorFlags |= (includeSteering ? JOYSTICK_INCLUDE_STEERING : 0);
 	
-    // Build Joystick HID Report Description
+  // Build Joystick HID Report Description
 	
 	// Button Calculations
 	uint8_t buttonsInLastByte = _buttonCount % 8;
@@ -104,7 +104,8 @@ Joystick_::Joystick_(
 		+ (includeBrake == true)
 		+ (includeSteering == true); 
 		
-	static uint8_t tempHidReportDescriptor[150];
+	//static uint8_t tempHidReportDescriptor[150];//GNZ
+	static uint8_t tempHidReportDescriptor[255];
 	int hidReportDescriptorSize = 0;
 
     // USAGE_PAGE (Generic Desktop)
@@ -118,16 +119,16 @@ Joystick_::Joystick_(
     // COLLECTION (Application)
     tempHidReportDescriptor[hidReportDescriptorSize++] = 0xa1;
     tempHidReportDescriptor[hidReportDescriptorSize++] = 0x01;
-	// USAGE (Pointer)
-	tempHidReportDescriptor[hidReportDescriptorSize++] = 0x09;
-	tempHidReportDescriptor[hidReportDescriptorSize++] = 0x01;
+	  // USAGE (Pointer)
+	  tempHidReportDescriptor[hidReportDescriptorSize++] = 0x09;
+	  tempHidReportDescriptor[hidReportDescriptorSize++] = 0x01;
     // REPORT_ID (Default: 1)
     tempHidReportDescriptor[hidReportDescriptorSize++] = 0x85;
     tempHidReportDescriptor[hidReportDescriptorSize++] = 0x01;
 
-	// COLLECTION (Physical)
-	tempHidReportDescriptor[hidReportDescriptorSize++] = 0xa1;
-	tempHidReportDescriptor[hidReportDescriptorSize++] = 0x00;
+	  // COLLECTION (Physical)
+	  tempHidReportDescriptor[hidReportDescriptorSize++] = 0xa1;
+	  tempHidReportDescriptor[hidReportDescriptorSize++] = 0x00;
 
 	if (_buttonCount > 0) {
 
@@ -497,29 +498,45 @@ void Joystick_::getForce(int32_t* forces)
 	forceCalculator(forces);
 }
 
+// gnz need to support 3 axis
 int32_t Joystick_::getEffectForce(volatile TEffectState& effect, Gains _gains, EffectParams _effect_params, uint8_t axis){
 	uint8_t direction;
-    uint8_t condition;
+  uint8_t condition;
 	bool useForceDirectionForConditionEffect = (effect.enableAxis == DIRECTION_ENABLE && effect.conditionBlocksCount == 1);
-
+  if( axis==2 ){  //Z axis
     if (effect.enableAxis == DIRECTION_ENABLE)
     {
-        direction = effect.directionX;
-		if (effect.conditionBlocksCount > 1) {
-            condition = axis;
-        } else {
-	        condition = 0; // only one Condition Parameter Block is defined
-		}
+      direction = effect.directionZ;
+      if (effect.conditionBlocksCount > 1) {
+        condition = axis;
+      } else {
+        condition = 0; // only one Condition Parameter Block is defined
+      }
     }
     else
     {
-        direction = axis == 0 ? effect.directionX : effect.directionY;
-        condition = axis;
+      direction = effect.directionZ;
+      condition = axis;
     }
-
+  }else{
+    if (effect.enableAxis == DIRECTION_ENABLE)
+    {
+      direction = effect.directionX;
+      if (effect.conditionBlocksCount > 1) {
+        condition = axis;
+      } else {
+        condition = 0; // only one Condition Parameter Block is defined
+      }
+    }
+    else
+    {
+      direction = axis == 0 ? effect.directionX : effect.directionY;
+      condition = axis;
+    }
+  }
     float angle = (direction * 360.0 / 255.0) * DEG_TO_RAD;
-    float angle_ratio = axis == 0 ? sin(angle) : -1 * cos(angle);
-	int32_t force = 0;
+    float angle_ratio = axis == 0 ? sin(angle) : -1 * cos(angle);   //gnz thisaffect only x and y.
+  	int32_t force = 0;
 	switch (effect.effectType)
     {
 	    case USB_EFFECT_CONSTANT://1
@@ -553,8 +570,8 @@ int32_t Joystick_::getEffectForce(volatile TEffectState& effect, Gains _gains, E
 	    	force = ConditionForceCalculator(effect, NormalizeRange(_effect_params.damperVelocity, _effect_params.damperMaxVelocity), condition) * _gains.damperGain;
 	    	if (useForceDirectionForConditionEffect) {
 				force *= angle_ratio;
-			}
-			break;
+			  }
+			  break;
 	    case USB_EFFECT_INERTIA://10
 	    	if (_effect_params.inertiaAcceleration < 0 && _effect_params.frictionPositionChange < 0) {
 	    		force = ConditionForceCalculator(effect, abs(NormalizeRange(_effect_params.inertiaAcceleration, _effect_params.inertiaMaxAcceleration)), condition) * _gains.inertiaGain;
@@ -562,16 +579,16 @@ int32_t Joystick_::getEffectForce(volatile TEffectState& effect, Gains _gains, E
 	    	else if (_effect_params.inertiaAcceleration < 0 && _effect_params.frictionPositionChange > 0) {
 	    		force = -1 * ConditionForceCalculator(effect, abs(NormalizeRange(_effect_params.inertiaAcceleration, _effect_params.inertiaMaxAcceleration)), condition) * _gains.inertiaGain;
 	    	}
-			if (useForceDirectionForConditionEffect) {
-				force *= angle_ratio;
-			}
+        if (useForceDirectionForConditionEffect) {
+          force *= angle_ratio;
+        }
 	    	break;
 	    case USB_EFFECT_FRICTION://11
-	    		force = ConditionForceCalculator(effect, NormalizeRange(_effect_params.frictionPositionChange, _effect_params.frictionMaxPositionChange), condition) * _gains.frictionGain;
-	    		if (useForceDirectionForConditionEffect) {
-				    force *= angle_ratio;
-			    }
-				break;
+        force = ConditionForceCalculator(effect, NormalizeRange(_effect_params.frictionPositionChange, _effect_params.frictionMaxPositionChange), condition) * _gains.frictionGain;
+        if (useForceDirectionForConditionEffect) {
+          force *= angle_ratio;
+        }
+        break;
 	    case USB_EFFECT_CUSTOM://12
 	    		break;
 	    }
@@ -582,21 +599,25 @@ int32_t Joystick_::getEffectForce(volatile TEffectState& effect, Gains _gains, E
 
 void Joystick_::forceCalculator(int32_t* forces) {
 	forces[0] = 0;
-    forces[1] = 0;
-	    for (int id = 0; id < MAX_EFFECTS; id++) {
-	    	volatile TEffectState& effect = DynamicHID().pidReportHandler.g_EffectStates[id];
-	    	if ((effect.state == MEFFECTSTATE_PLAYING) &&
-	    		((effect.elapsedTime <= effect.duration) ||
-	    		(effect.duration == USB_DURATION_INFINITE)) && !DynamicHID().pidReportHandler.devicePaused)
-	    	{
-				forces[0] += (int32_t)(getEffectForce(effect, m_gains[0], m_effect_params[0], 0));
-				forces[1] += (int32_t)(getEffectForce(effect, m_gains[1], m_effect_params[1], 1));
-	    	}
-	    }
+  forces[1] = 0;
+  forces[2] = 0;
+  for (int id = 0; id < MAX_EFFECTS; id++) {
+    volatile TEffectState& effect = DynamicHID().pidReportHandler.g_EffectStates[id];
+    if ((effect.state == MEFFECTSTATE_PLAYING) &&
+      ((effect.elapsedTime <= effect.duration) ||
+      (effect.duration == USB_DURATION_INFINITE)) && !DynamicHID().pidReportHandler.devicePaused)
+    {
+    forces[0] += (int32_t)(getEffectForce(effect, m_gains[0], m_effect_params[0], 0));
+    forces[1] += (int32_t)(getEffectForce(effect, m_gains[1], m_effect_params[1], 1));
+    forces[2] += (int32_t)(getEffectForce(effect, m_gains[2], m_effect_params[2], 2));
+    }
+  }
 	forces[0] = (int32_t)((float)1.0 * forces[0] * m_gains[0].totalGain / 10000); // each effect gain * total effect gain = 10000
 	forces[1] = (int32_t)((float)1.0 * forces[1] * m_gains[1].totalGain / 10000); // each effect gain * total effect gain = 10000
+	forces[2] = (int32_t)((float)1.0 * forces[2] * m_gains[2].totalGain / 10000); // each effect gain * total effect gain = 10000
 	forces[0] = map(forces[0], -10000, 10000, -250, 250);
 	forces[1] = map(forces[1], -10000, 10000, -250, 250);
+	forces[2] = map(forces[2], -10000, 10000, -250, 250);
 }
 
 int32_t Joystick_::ConstantForceCalculator(volatile TEffectState& effect) 

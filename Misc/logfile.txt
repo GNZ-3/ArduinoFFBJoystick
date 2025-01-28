@@ -1,4 +1,4 @@
-Enumerated Joystick : My FFB Controller1
+Enumerated Joystick : SparkFun Pro Micro
 Supported Effects : 
    - GUID_ConstantForce
    - GUID_RampForce
@@ -13,4 +13,4 @@ Supported Effects :
    - GUID_Friction
    - GUID_CustomForce
 
-Creating effects for My FFB Controller1
+Creating effects for SparkFun Pro Micro
