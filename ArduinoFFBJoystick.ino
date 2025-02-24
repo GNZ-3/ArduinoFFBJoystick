@@ -60,7 +60,7 @@ int16_t moverange[TOTALAXIS] = {180,200,100};     // how much encorder value fro
 uint8_t motorclp[TOTALAXIS] = {63,127,20};        // Max motor force while in range
 uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
 char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
-char    axisname[TOTALAXIS] = { 'x', 'y', 'z' };  // Axis name to display in LCD
+char    axisname[TOTALAXIS] = { 'X', 'Y', 'Z' };  // Axis name to display in LCD
 Data    sendData;                                 // Data packet between master and slave.
 bool       FFBisWorking;
 
@@ -89,22 +89,35 @@ void setup() {
   button1.begin();
 	button2.begin();
   LoadCalibrationdata();
-  while( !validcalibrationdata()){
-    int timeout = millis() + 200000; //20 sec
+//  while( true ){
+  //while( !validcalibrationdata()){
+    unsigned long starttime = millis();
+    int count = 0;
+    Serial.print("Wait user input. Timeout is 20sec.");
     while( true ){
-      if( button2.pressed() || millis() > timeout ){
+      if( button2.pressed()  ){
         Serial.println("Skip calib.");
         break;
       }
       if( button1.pressed() ){
         Serial.println("Go calib.");
         calibration();
+        break;
+      }
+      unsigned long nowtime = millis(); //+ 2000000; //20 sec
+      if( ((nowtime - starttime) / 1000) > count ){
+        Serial.print(".");
+        if( count++ >20 ) break;
       }
       //LoadAnalogData();
       //LCDAnalogData(); // show axis data in LCD
       delay(10);
     }
-  }
+    if( !validcalibrationdata() ){
+          calibration();
+    }
+
+//  }
   SaveCalibrationdata();
 
   Joystick.setXAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
@@ -136,7 +149,7 @@ ISR(TIMER3_COMPA_vect){
 void loop() {
   for(uint8_t i=0; i<TOTALAXIS;i++){
     valueproc[i] = value[i] = myAnalogRead(i);
-    Serial.print("\tEnc" + String(i) + ": " );
+    Serial.print("\tEnc" + (String)axisname[i] + "\t" );
     Serial.print( value[i] );
     if(value[i] > moverange[i]){
       valueproc[i] = moverange[i];
@@ -180,13 +193,13 @@ void loop() {
         // if sensor read value is different than process value, joystick posotion is exceeded HW limit. Need strong reverse force. 
         sendData.force =(uint8_t) constrain( motorclp[i] + pow( value[i] - valueproc[i],2 ),0,motormax[i] ); //Generate force from clip & exceeded.
         sendData.dir = (valueproc[i] > 0 )? RIGHT:LEFT; 
-        Serial.print("\tLIMIT:" + String(i) + "=" );
+        Serial.print("\tLIMIT:" +  (String)axisname[i] + "\t" );
         Serial.print( sendData.force );
       }else{
         // Joystick position is in range. Apply regular FFB force
         sendData.force = (uint8_t) map( abs(forces[i]) ,0,FORCE_MAX,0,motorclp[i] ); //FFB force range is -255 to 255 which converted to clip value 
         sendData.dir = (forces[i] > 0)? LEFT:RIGHT;
-        Serial.print("\tforce:" + String(i) + "=" );
+        Serial.print("\tforce" +  (String)axisname[i] + "\t" );
         Serial.print( sendData.force );
       }
       sendEvent( &sendData );
@@ -201,7 +214,7 @@ void sendEvent( Data *sendData){
   Wire.beginTransmission(I2C_ADD_SLAVE);
   Wire.write( (byte *)sendData, sizeof( Data));
   int state = Wire.endTransmission();
-  Serial.print("\tSend:" + String(sendData->axis) + "=" );
+  Serial.print("\tSend:" +  (String)axisname[sendData->axis] + "\t" );
   Serial.print( state );
 }
 
@@ -219,19 +232,19 @@ void calibration() {
 
 int myAnalogRead( int i) {
   int readval = analogRead( analogpin[i] );
-    Serial.print("\t[");
-    Serial.print(readval);
+//    Serial.print("\t[");
+//    Serial.print(readval);
   int x = readval - encoffset[i];  // s=100 offset=-411 / s=611 -> x=1022-1022=0 /s=612 -> x=1023-1022=1 
   if( x > EncorderHalf ){
     x = x - EncorderHalf - 1;
   }else if(x <- EncorderHalf){
     x = x + EncorderHalf + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
   }
-    Serial.print("\t");
-    Serial.print(encoffset[i]);
-    Serial.print("\t");
-    Serial.print(x);
-    Serial.print("]");
+//    Serial.print("\t");
+//    Serial.print(encoffset[i]);
+//    Serial.print("\t");
+//    Serial.print(x);
+//    Serial.print("]");
     return x;
 }
 
