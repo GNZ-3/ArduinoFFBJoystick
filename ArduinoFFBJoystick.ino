@@ -1,62 +1,75 @@
 // Update board ID:%userprofile%\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.6
 // 起動時に各軸をキャリブレーション、GUIの追加
+// X軸詳細化(タイミングプーリ購入）
+// カルマンフィルタの追加
+// センタスプリングの追加（ツール起動だけでOK?）
 // パラメータチューニング（スプリング強度、フリクション、センター）用の切替スイッチと調整用ロータリーエンコーダの追加
-//C:\Users\LocalAdmin\Documents\Arduino\_Nomoreused\FFBPOC\build\SparkFun.avr.promicro\FFBPOC.ino.hex
-#include <EEPROM.h>             // For save an axis data
-#include <digitalWriteFast.h>   // For otary encorder switch: https://forum.arduino.cc/t/digitalwritefast-digitalreadfast-pinmodefast-etc/47037
-#include "Joystick.h"           // FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
-#include "BTS7960.h"            // Motor Driver: https://github.com/luisllamasbinaburo/Arduino-BTS7960
-//#include "SSD1306Ascii.h"     // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-#include "SSD1306AsciiAvrI2c.h" // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-#include <Button.h>             // Button class https://github.com/madleech/Button
-// PIN definition
-#define BTS7960_ENA_1   7     // Enable for X motor
-#define BTS7960_LPWM_1  6     // Left PWM for X motor
-#define BTS7960_RPWM_1 11     // Right PWM for X motor.Pin 5 and 3 did not work.
-#define BTS7960_ENA_2   8     // Enable for Y motor
-#define BTS7960_LPWM_2  9     // Left PWM for Y motor
-#define BTS7960_RPWM_2 10     // Right PWM for Y motor
-//#define CAP1188_RESET   16  // CAP1188 touch sensor reset pin
-#define BUTTON1        14            //Joystick bnutton 1
-#define BUTTON2        16     //Joystick bnutton 2
-// #define I2C_ADD_CAP1188 0x29   // I2C address for CAP1199 touch sensor
-#define I2C_ADD_SSD1306 0x3C  // I2C address for SSD1306 LCD
-// Other define
-#define ENCODER_MIN INT16_MIN // -32767
-#define ENCODER_MAX INT16_MAX // 32768
-#define NUMBER_OF_AXIS 3      // x, y and z axis
+#include <digitalWriteFast.h>
+#include <EEPROM.h>               // For save an axis data
+#include <Wire.h>                 // For i2c communication
+#include "Joystick.h"             // FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
+#include "SSD1306Ascii.h"         // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+#include "SSD1306AsciiAvrI2c.h"   // Same as above
+//#include "SSD1306Ascii.h"       // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+#include "SSD1306AsciiAvrI2c.h"   // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+#include <Button.h>               // Button class https://github.com/madleech/Button
+#define PIN_BTN1         2        //Joystick bnutton 1
+#define PIN_BTN2         3        //Joystick bnutton 2
+#define PIN_LED           13
+#define I2C_ADD_SSD1306 0x3C      // I2C address for SSD1306 LCD
+#define I2C_ADD_SLAVE   0x8       // I2C address for Slave mega2560
+#define I2C_ADD_MASTER  0x9       // I2C address for master leonald
+#define JOYSTICK_AXIS_MIN     INT16_MIN // -32767
+#define JOYSTICK_AXIS_MAX     INT16_MAX // 32768
+#define ENCORDER_MAX         1023 // 10 bit (0-1023)
 
-  enum Status {
-    Center,
-    TopLeft,
-    BottomRight,
-    ApplyForce,
-    End,
-    Aboart
-  };
+#define FORCE_MIN       -250      //
+#define FORCE_MAX       250       //
+#define TOTALAXIS       3         // Which means x,y and z axis
+#define LEFT            0         // Motor direction on BTS7960 board
+#define RIGHT           1         // Motor direction on BTS7960 board
 
+struct Data{
+  byte cmd;           // Command char from master to slave only
+  byte axis;          // 0=x,1=y,2=z
+  byte dir;           // LEFT or RIGHT
+  uint8_t force;     // 0-250
+};
+enum Status {
+  Center,
+  TopLeft,
+  BottomRight,
+  ApplyForce,
+  End,
+  Aboart
+};
 
-// Declare global valiable
-Gains gains[NUMBER_OF_AXIS];                            // FFB gain
-EffectParams effectparams[NUMBER_OF_AXIS];              // FFB effect parmeter
-int32_t valuecen[NUMBER_OF_AXIS]   = { 0, 0, 0 };       //Jostick center value  492,350,168
-int32_t forces[NUMBER_OF_AXIS]     = { 0, 0, 0 };       // Force value for servo motor
-int32_t value[NUMBER_OF_AXIS]      = { 0, 0, 0 };       // Encorder value
-int32_t valuemin[NUMBER_OF_AXIS]   = { 0, 0, 0 };       // {valuecen[0]-180, valuecen[1]-200, valuecen[2]-100};  //Joystick HW limit
-int32_t valuemax[NUMBER_OF_AXIS]   = { 0, 0, 0 };       // {valuecen[0]+180, valuecen[1]+200, valuecen[2]+100}; //Joystick HW limit
-int16_t outofrange[NUMBER_OF_AXIS] = { 0, 0, 0 };       //Joystick reached HW limit
-int16_t forcemax[NUMBER_OF_AXIS]   = { 100, 100, 100 }; // FFB max torque
-char    analogpin[NUMBER_OF_AXIS]  = { A0, A1, A2 };    // x, y  and Z encorder analog input PIN
-char    axisname[NUMBER_OF_AXIS]   = { 'x', 'y', 'z' }; // Axis name to display in LCD
+int32_t EncorderHalf = ENCORDER_MAX>1;
+Gains gains[TOTALAXIS];                           // For FFB
+EffectParams effectparams[TOTALAXIS];             // For FFB
+int32_t forces[TOTALAXIS]   = {0,0,0};            // For FFB
+int16_t value[TOTALAXIS]    = {0,0,0};            // Encorder value
+int16_t valueproc[TOTALAXIS]= {0,0,0};            // Joystick axis value clipped by valuemin/valuemax
+//int16_t valuecen[TOTALAXIS] = {260,676,160};    // Jostick center
+//int16_t valuecen[TOTALAXIS] = {0,0,0};            // Jostick center
+int16_t encoffset[TOTALAXIS] = {0,0,0};           // Encorder offset from center (ENCORDER_MAX/2).
+int16_t moverange[TOTALAXIS] = {180,200,100};     // how much encorder value from center.
+
+//int16_t valuemin[TOTALAXIS] = {0,0,0};
+//int16_t valuemax[TOTALAXIS] = {0,0,0};
+uint8_t motorclp[TOTALAXIS] = {63,127,20};        // Max motor force while in range
+uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
+char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
+char    axisname[TOTALAXIS] = { 'x', 'y', 'z' };  // Axis name to display in LCD
+Data    sendData;                                 // Data packet between master and slave.
+bool       FFBisWorking;
 
 //Create LCD instance
-SSD1306AsciiAvrI2c oled;
-
+//  SSD1306AsciiAvrI2c oled;
 // create servo motor
-BTS7960 motor[] = {
-  BTS7960(BTS7960_ENA_1, BTS7960_LPWM_1, BTS7960_RPWM_1),
-  BTS7960(BTS7960_ENA_2, BTS7960_LPWM_2, BTS7960_RPWM_2),
-};
+//Create button
+Button button1(PIN_BTN1);
+Button button2(PIN_BTN2);
 //Create joystick
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   0, 0,                   // No Button, No Hat Switch
@@ -64,87 +77,45 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
   false, false, false,    //  No Rx, Ry, Rz
   false, false,           // No rudder or throttle
   false, false, false);   // No accelerator, brake, or steering
-//Create button
-Button button1(BUTTON1);
-Button button2(BUTTON2);
 
 void setup() {
-  pinMode(analogpin[0], INPUT_PULLUP);  //Set pin mode for X
-  pinMode(analogpin[1], INPUT_PULLUP);  //Set pin mode for y
-  pinMode(analogpin[2], INPUT_PULLUP);  //Set pin mode for z
-
-  delay(3000);
   Serial.begin(115200);
-  Serial.println("Serial init.");
-  oled.begin(&Adafruit128x64, I2C_ADD_SSD1306);
-  oled.clear();
-  oled.setFont(Adafruit5x7);
-  oled.set1X();
-  oled.println("LCD init.");
-  Serial.println("LCD init.");
-
+  while (!Serial); // Leonardo: wait for serial monitor
+  pinMode(analogpin[0], INPUT_PULLUP);  //Set pin mode for Encorder X
+  pinMode(analogpin[1], INPUT_PULLUP);  //Set pin mode for Encorder y
+  pinMode(analogpin[2], INPUT_PULLUP);  //Set pin mode for Encorder z
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED,LOW);   // Turn off onboard LED
   button1.begin();
 	button2.begin();
-
   LoadCalibrationdata();
-  Serial.println("Load data.");
-  for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-    Serial.print(axisname[i]);
-    Serial.print(":");
-    Serial.print(valuemin[i]);
-    Serial.print("/");
-    Serial.print(valuecen[i]);
-    Serial.print("/");
-    Serial.print(valuemax[i]);
-    Serial.println("");
-  }
-
-  //LCDAnalogData();
-  int timeout = millis() + 600000; //60 sec
-  oled.setCursor(0,0);
-  oled.println("\nCalib ?");
-  while( true ){
-    if( button2.pressed() ){
-      Serial.println("Skip calib.");
-      oled.println("\nSkip calib.");
-      oled.clearToEOL();
-      break;
-    }
-    if( button1.pressed() ){
-      Serial.println("Go calib.");
-      oled.println("\nGo calib.");
-      oled.clearToEOL();
-      calibration();
-    }
-    if(millis() > timeout){
-      if(validcalibrationdata()){
-        Serial.println("Timeout.");
-        oled.println("\nTimeout.");
-        oled.clearToEOL();
+  while( !validcalibrationdata()){
+    int timeout = millis() + 200000; //20 sec
+    while( true ){
+      if( button2.pressed() || millis() > timeout ){
+        Serial.println("Skip calib.");
         break;
-      }else{
-        Serial.println("Repeat. Data is invalid.");
-        oled.println("\nRepeat.");
-        timeout = millis() + 600000;
       }
+      if( button1.pressed() ){
+        Serial.println("Go calib.");
+        calibration();
+      }
+      //LoadAnalogData();
+      //LCDAnalogData(); // show axis data in LCD
+      delay(10);
     }
-    LoadAnalogData();
-    LCDAnalogData(); // show axis data in LCD
-    delay(10);
   }
-  SaveCalibrationdata(); 
-  delay(3000);
+  SaveCalibrationdata();
 
-
-// Enable motors.
-  motor[0].Enable();
-  motor[1].Enable();
-
-  Joystick.setXAxisRange(ENCODER_MIN, ENCODER_MAX);
-  Joystick.setYAxisRange(ENCODER_MIN, ENCODER_MAX);
-  Joystick.setZAxisRange(ENCODER_MIN, ENCODER_MAX);
+  Joystick.setXAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
+  Joystick.setYAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
+  Joystick.setZAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
   Joystick.setGains(gains);
   Joystick.begin(true);
+  Wire.setWireTimeout(3000 /* us */, true /* reset_on_timeout */);
+  FFBisWorking = true;
+  Wire.begin();
+
 
 // Needed for FFB to get game FFB data through USB
   cli();
@@ -162,196 +133,26 @@ ISR(TIMER3_COMPA_vect){
   Joystick.getUSBPID();
 }
 
-void LoadAnalogData(){
-  for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-    value[i] = analogRead(analogpin[i]);
-  }
-}
-
-
-bool validcalibrationdata(void) {
-  for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-    if (valuecen[i] == 0 || valuemin[i] == 0 || valuemax[i] == 0){
-      Serial.print("Invalid Data cen/min/max is 0. Index:");
-      Serial.println(i);
-      return false;
-    }
-    if (valuecen[i] <= valuemin[i] || valuecen[i] >= valuemax[i]){
-      Serial.print("Invalid Data Is not min<cen<max. Index:");
-      Serial.println(i);
-      return false;
-    }
-  }
-  Serial.print("Data is OK.");
-  return true;
-}
-
-// Load calibration date from EEPROM
-void LoadCalibrationdata(){
-  EEPROM.get(0,valuemin);
-  EEPROM.get(sizeof(valuemin),valuecen);
-  EEPROM.get(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
-}
-// Update calibration date to EEPROM if changed
-void SaveCalibrationdata(){
-  EEPROM.put(0,valuemin);
-  EEPROM.put(sizeof(valuemin),valuecen);
-  EEPROM.put(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
-}
-
-// Call from setup() to set joystick center and limit
-// We are here because button 1 press then released.
-// Press button1 to set center. button2 to clear.
-// Press button1 to set topleft.  button2 to clear.
-// Press button1 to set bottomright. button2 to clear.
-// limit and spring center start
-// Press button1 to set and end. button2 to clear.
-
-void LCDAnalogData(){
-  for (int i = 0; i < NUMBER_OF_AXIS; i++) {
-    oled.print(axisname[i]);
-    oled.print(":");
-    oled.print(value[i]);
-    oled.print("/");
-    oled.print(valuecen[i]);
-    oled.clearToEOL();
-  }
-}
-void FillArray(int32_t src[],int32_t dst[], int n){
-    for(int i = 0; i < n; i++){ dst[i] = src[i]; }
-}
-
-void calibration() {
-// Disable while in calibration
-  motor[0].Disable();
-  motor[1].Disable();
-  Serial.println("Calib start.");
-  oled.clear();
-  oled.println("CALIBRATION");
-  int state=Status::Center;
-  while( state < Status::End ){
-    oled.setCursor(0,1);
-    switch(state){
-      case Status::Center:
-        oled.println("Center");
-        oled.clearToEOL();
-        if(button1.pressed()){
-          state=Status::TopLeft;
-          FillArray( value, valuecen,NUMBER_OF_AXIS);
-          Serial.println("Calib center done.");
-          delay(1000);
-        }
-        break;
-      case Status::TopLeft:
-        oled.println("Top Left");
-        oled.clearToEOL();
-        if(button1.pressed()){
-          state=Status::BottomRight;
-          FillArray( value, valuemin,NUMBER_OF_AXIS);
-          Serial.println("Calibration topleft done.");
-          delay(1000);
-        }
-        if(button2.pressed()){
-          state=Status::Center;
-          Serial.println("Back to calib center.");
-          delay(1000);
-        }
-        break;
-      case Status::BottomRight:
-        oled.println("Bot Right");
-        oled.clearToEOL();
-        if(button1.pressed()){
-          state=Status::ApplyForce;
-          // Enable motors..
-          motor[0].Enable();
-          motor[1].Enable();
-          FillArray( value, valuemax,NUMBER_OF_AXIS);
-          Serial.println("Calibration bottomright done.");
-          delay(1000);
-        }
-        if(button2.pressed()){
-          state=Status::TopLeft;
-          Serial.println("Go back to calib topleft.");
-          delay(1000);
-        }
-        break;
-      case Status::ApplyForce:
-        oled.println("Force is ON. ");
-        oled.clearToEOL();
-        if(button1.pressed()){
-          state=Status::End;
-          Serial.println("Calib. Done.");
-          delay(1000);
-        }
-        if(button2.pressed()){
-          state=Status::BottomRight;
-          motor[0].Disable();
-          motor[1].Disable();
-          Serial.println("Calibration go back to bottomright.");
-          delay(1000);
-        }
-        /*
-
-        //Apply spring force
-        for(int i=0; i<NUMBER_OF_AXIS;i++){
-          int myforce = 0;
-          outofrange[i] = 0;
-          if( value[i] > valuemax[i] ){
-            outofrange[i] = value[i] - valuemax[i];
-            myforce = forcemax[i] + pow(outofrange[i],2); 
-          }
-          if( value[i] < valuemin[i]  ){
-            outofrange[i] = valuemin[i] - value[i];
-            myforce = forcemax[i] + pow(outofrange[i],2); 
-          }
-          if(outofrange[i] == 0 ){
-            myforce = map( abs(valuecen[i]-value[i]),0,255,0,forcemax[i] );
-          }
-          if(myforce > 255) myforce=255;
-          (value[i] - valuecen[i] > 0)? motor[i].TurnRight( myforce ) : motor[i].TurnLeft( myforce );
-        }
-        */
-        break;
-    }
-    LoadAnalogData();
-    LCDAnalogData();
-    delay(50);
-  }
-  Serial.println("Calibration completed.");
-}
-
 void loop() {
- //while(true){}
-  LoadAnalogData();
-  for(int i=0; i<NUMBER_OF_AXIS;i++){
-    int proc = 0;
-    Serial.print("\tEnc" );
-    Serial.print(i);
-    Serial.print(": " );
-    Serial.print(value[i] );
-    outofrange[i] = 0;
-    if( value[i] > valuemax[i] ){
-      proc = ENCODER_MAX;
-      outofrange[i] = value[i] - valuemax[i]; 
+  for(uint8_t i=0; i<TOTALAXIS;i++){
+    valueproc[i] = value[i] = myAnalogRead(i);
+    Serial.print("\tEnc" + String(i) + ": " );
+    Serial.print( value[i] );
+    if(value[i] > moverange[i]){
+      valueproc[i] = moverange[i];
+    }else if(value[i] < -moverange[i]){
+      valueproc[i] = -moverange[i];
     }
-    if( value[i] < valuemin[i]  ){
-      proc = ENCODER_MIN;
-      outofrange[i] = valuemin[i] - value[i];
-    }
-    if(outofrange[i] == 0 ){
-      proc = map( value[i],valuemin[i],valuemax[i],ENCODER_MIN,ENCODER_MAX );
-    }
-    Serial.print( "\t");
-    Serial.print( proc );
+    int16_t proc = map( valueproc[i], -moverange[i], moverange[i],JOYSTICK_AXIS_MIN,JOYSTICK_AXIS_MAX ); //valueproc is int16_t
+    Serial.print( "\t" ); 
+    Serial.print( proc ); 
+    effectparams[i].springMaxPosition = JOYSTICK_AXIS_MAX; 
+    effectparams[i].springPosition = proc >>1;
     switch (i) {
       case 0:
-        effectparams[i].springMaxPosition = ENCODER_MAX; 
-        effectparams[i].springPosition = proc;
-        Joystick.setXAxis(proc);
+        Joystick.setXAxis(proc);                // void Joystick_::setXAxis(int16_t value)
         break;  //Removing this cause some unexpectedvaiable change. Someimtes Leonald won't boot any more.
       case 1:
-        effectparams[i].springMaxPosition = ENCODER_MAX; 
-        effectparams[i].springPosition = proc;
         Joystick.setYAxis(proc);
         break;
       case 2:
@@ -363,33 +164,100 @@ void loop() {
   Joystick.getForce(forces);
 
 //Apply force to each motor.
-  for(int i=0; i<NUMBER_OF_AXIS-1;i++){
-    int32_t myforce;
-    if( outofrange[i] > 0 ){
-      //myforce = (outofrange[i]>255)?255:outofrange[i];
-      myforce = forcemax[i] + pow(outofrange[i],2); 
-      if(myforce > 255) myforce=255;
-      (value[i] - valuecen[i] > 0)? motor[i].TurnRight( myforce ) : motor[i].TurnLeft( myforce );
-      Serial.print("\t[Limit:");
-      Serial.print(i);
-      Serial.print("=");
-      Serial.print(value[i]);
-      Serial.print("\tApply=");
-      Serial.print(myforce);
-      Serial.print("]");
-      //Serial.print("\t[Limit:" + String(i) + "=" + String(value[i]) + "\tApply=" + String(myforce) + "] ");
-    } else {
-      myforce = map( abs(forces[i]),0,255,0,forcemax[i] );
-      (forces[i] > 0)? motor[i].TurnLeft( myforce ) : motor[i].TurnRight( myforce );
-      Serial.print("\t[Force:");
-      Serial.print(i);
-      Serial.print("=");
-      Serial.print(forces[i]);
-      Serial.print("\tApply=");
-      Serial.print(myforce);
-      Serial.print("] ");
-//      Serial.print("\t[Force:" + String(i) + "=" + String(forces[i]) + "\tApply=" + String(myforce) + "] ");
+  if (Wire.getWireTimeoutFlag())
+  {
+      Wire.clearWireTimeoutFlag();
+      Serial.print("Wire timeout detected. Disable FFB");
+      digitalWrite(PIN_LED,HIGH);   // Turn on onboard LED
+      FFBisWorking = false;
+  }
+  if(FFBisWorking){
+    for(uint8_t i=0; i<TOTALAXIS;i++){
+      int32_t motorforce;
+      sendData.cmd = "m";
+      sendData.axis = i;
+      if(value[i] != valueproc[i]){
+        // if sensor read value is different than process value, joystick posotion is exceeded HW limit. Need strong reverse force. 
+        sendData.force =(uint8_t) constrain( motorclp[i] + pow( value[i] - valueproc[i],2 ),0,motormax[i] ); //Generate force from clip & exceeded.
+        sendData.dir = (valueproc[i] > 0 )? RIGHT:LEFT; 
+        Serial.print("\tLIMIT:" + String(i) + "=" );
+        Serial.print( sendData.force );
+      }else{
+        // Joystick position is in range. Apply regular FFB force
+        sendData.force = (uint8_t) map( abs(forces[i]) ,0,FORCE_MAX,0,motorclp[i] ); //FFB force range is -255 to 255 which converted to clip value 
+        sendData.dir = (forces[i] > 0)? LEFT:RIGHT;
+        Serial.print("\tforce:" + String(i) + "=" );
+        Serial.print( sendData.force );
+      }
+      sendEvent( &sendData );
     }
+  }else{
+    Serial.print( "\tFFB is disabled." );
   }
   Serial.println("");
+}
+
+void sendEvent( Data *sendData){
+  Wire.beginTransmission(I2C_ADD_SLAVE);
+  Wire.write( (byte *)sendData, sizeof( Data));
+  int state = Wire.endTransmission();
+  Serial.print("\tSend:" + String(sendData->axis) + "=" );
+  Serial.print( state );
+}
+
+void calibration() {
+  for (int i = 0; i < TOTALAXIS; i++) {
+    encoffset[i] =0;
+    encoffset[i] =  analogRead(i) ;   // 0-1023 -> 511
+    //以後、1024以上なら1024を引く、マイナスなら１０２4を足す
+    Serial.print("\tOffset");
+    Serial.print(i);
+    Serial.print("\t");
+    Serial.print(encoffset[i]);
+  }
+}
+
+int myAnalogRead( int i) {
+  int readval = analogRead( analogpin[i] );
+    Serial.print("\t[");
+    Serial.print(readval);
+  int x = readval - encoffset[i];  // s=100 offset=-411 / s=611 -> x=1022-1022=0 /s=612 -> x=1023-1022=1 
+  if( x > EncorderHalf ){
+    x = x - EncorderHalf - 1;
+  }else if(x <- EncorderHalf){
+    x = x + EncorderHalf + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
+  }
+    Serial.print("\t");
+    Serial.print(encoffset[i]);
+    Serial.print("\t");
+    Serial.print(x);
+    Serial.print("]");
+    return x;
+}
+
+
+
+bool validcalibrationdata(void) {
+  for (int i = 0; i < TOTALAXIS; i++) {
+    if (encoffset[i] == 0 ){
+      Serial.print("Invalid Data at index:");
+      Serial.println(encoffset[i]);
+      return false;
+    }
+  }
+  Serial.print("Data is OK.");
+  return true;
+}
+
+// Load calibration date from EEPROM
+void LoadCalibrationdata(){
+  EEPROM.get(0,encoffset);
+//  EEPROM.get(sizeof(valuemin),valuecen);
+//  EEPROM.get(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
+}
+// Update calibration date to EEPROM if changed
+void SaveCalibrationdata(){
+  //EEPROM.update(0,encoffset);
+//  EEPROM.put(sizeof(valuemin),valuecen);
+//  EEPROM.put(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
 }
