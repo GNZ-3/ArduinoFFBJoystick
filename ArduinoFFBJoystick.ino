@@ -57,7 +57,7 @@ int16_t moverange[TOTALAXIS] = {180,200,100};     // how much encorder value fro
 
 //int16_t valuemin[TOTALAXIS] = {0,0,0};
 //int16_t valuemax[TOTALAXIS] = {0,0,0};
-uint8_t motorclp[TOTALAXIS] = {63,127,20};        // Max motor force while in range
+uint8_t motorclp[TOTALAXIS] = {96,127,20};        // Max motor force while in range
 uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
 char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
 char    axisname[TOTALAXIS] = { 'X', 'Y', 'Z' };  // Axis name to display in LCD
@@ -107,7 +107,7 @@ void setup() {
       unsigned long nowtime = millis(); //+ 2000000; //20 sec
       if( ((nowtime - starttime) / 1000) > count ){
         Serial.print(".");
-        if( count++ >20 ) break;
+        if( count++ >2 ) break;
       }
       //LoadAnalogData();
       //LCDAnalogData(); // show axis data in LCD
@@ -160,7 +160,7 @@ void loop() {
     Serial.print( "\t" ); 
     Serial.print( proc ); 
     effectparams[i].springMaxPosition = JOYSTICK_AXIS_MAX; 
-    effectparams[i].springPosition = proc >>1;
+    effectparams[i].springPosition = proc ;
     switch (i) {
       case 0:
         Joystick.setXAxis(proc);                // void Joystick_::setXAxis(int16_t value)
