@@ -14,6 +14,7 @@ https://github.com/GNZ-3/ArduinoFFBJoystick
 ご自身のArduinoフォルダ(Documents\Arduino\)に展開してください。
 ライブラリマネージャから以下をインストールします。
 digitalWriteFast
+DynamicHIDフォルダをLibraryフォルダ（Documents\Arduino\Library）にコピーします。
 
 Mega側（スレーブ）
 以下のアドレスを開き、CodeからDownload.zipを選んでダウンロードします。
@@ -41,14 +42,15 @@ If you only needs 2 axis FFB, uno can be used.
 
 [Compile]
 Leonald for Master
-Open lik below and then Code -> Download.ZIP to dowonload it.
+Open link below and then Code -> Download.ZIP to dowonload it.
 https://github.com/GNZ-3/ArduinoFFBJoystick
 Extract it to your own Arduino folder(Documents\Arduino\)
 Install below from Library Manager in IDE
 digitalWriteFast
+Copy DynamicHID folder into Library folder (Documents\Arduino\Library).
 
 Mega for Slave
-Open lik below and then Code -> Download.ZIP to dowonload it.
+Open link below and then Code -> Download.ZIP to dowonload it.
 https://github.com/GNZ-3/MegaSlave
 Extract it to your own Arduino folder(Documents\Arduino\)
 Install below from Library Manager in IDE
