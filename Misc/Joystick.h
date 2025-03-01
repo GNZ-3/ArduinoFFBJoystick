@@ -58,6 +58,7 @@
 #define DIRECTION_ENABLE                   0x04
 #define X_AXIS_ENABLE                      0x01
 #define Y_AXIS_ENABLE                      0x02
+#define Z_AXIS_ENABLE                      0x03   //gnz
 #define FORCE_FEEDBACK_MAXGAIN              100
 #define DEG_TO_RAD              ((float)((float)3.14159265359 / 180.0))
 
@@ -175,7 +176,7 @@ public:
 	Joystick_(
 		uint8_t hidReportId = JOYSTICK_DEFAULT_REPORT_ID,
 		uint8_t joystickType = JOYSTICK_TYPE_JOYSTICK,
-    uint8_t buttonCount = JOYSTICK_DEFAULT_BUTTON_COUNT,
+        uint8_t buttonCount = JOYSTICK_DEFAULT_BUTTON_COUNT,
 		uint8_t hatSwitchCount = JOYSTICK_DEFAULT_HATSWITCH_COUNT,
 		bool includeXAxis = true,
 		bool includeYAxis = true,

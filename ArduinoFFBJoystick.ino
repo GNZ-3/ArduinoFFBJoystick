@@ -8,20 +8,20 @@
 #include <EEPROM.h>               // For save an axis data
 #include <Wire.h>                 // For i2c communication
 #include "Joystick.h"             // FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
-#include "SSD1306Ascii.h"         // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-#include "SSD1306AsciiAvrI2c.h"   // Same as above
+//#include "SSD1306Ascii.h"         // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+//#include "SSD1306AsciiAvrI2c.h"   // Same as above
 //#include "SSD1306Ascii.h"       // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-#include "SSD1306AsciiAvrI2c.h"   // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+//#include "SSD1306AsciiAvrI2c.h"   // LCD Driver:   https://github.com/greiman/SSD1306Ascii
 #include <Button.h>               // Button class https://github.com/madleech/Button
-#define PIN_BTN1         2        //Joystick bnutton 1
-#define PIN_BTN2         3        //Joystick bnutton 2
-#define PIN_LED           13
+#define PIN_BTN1        2         //Joystick bnutton 1
+#define PIN_BTN2        3         //Joystick bnutton 2
+#define PIN_LED         13
 #define I2C_ADD_SSD1306 0x3C      // I2C address for SSD1306 LCD
 #define I2C_ADD_SLAVE   0x8       // I2C address for Slave mega2560
 #define I2C_ADD_MASTER  0x9       // I2C address for master leonald
 #define JOYSTICK_AXIS_MIN     INT16_MIN // -32767
 #define JOYSTICK_AXIS_MAX     INT16_MAX // 32768
-#define ENCORDER_MAX         1023 // 10 bit (0-1023)
+#define ENCORDER_MAX          1023 // 10 bit (0-1023)
 
 #define FORCE_MIN       -250      //
 #define FORCE_MAX       250       //
@@ -33,7 +33,7 @@ struct Data{
   byte cmd;           // Command char from master to slave only
   byte axis;          // 0=x,1=y,2=z
   byte dir;           // LEFT or RIGHT
-  uint8_t force;     // 0-250
+  uint8_t force;      // 0-250
 };
 enum Status {
   Center,
@@ -45,24 +45,19 @@ enum Status {
 };
 
 int32_t EncorderHalf = ENCORDER_MAX>1;
-Gains gains[TOTALAXIS];                           // For FFB
+Gains   gains[TOTALAXIS];                           // For FFB
 EffectParams effectparams[TOTALAXIS];             // For FFB
 int32_t forces[TOTALAXIS]   = {0,0,0};            // For FFB
 int16_t value[TOTALAXIS]    = {0,0,0};            // Encorder value
 int16_t valueproc[TOTALAXIS]= {0,0,0};            // Joystick axis value clipped by valuemin/valuemax
-//int16_t valuecen[TOTALAXIS] = {260,676,160};    // Jostick center
-//int16_t valuecen[TOTALAXIS] = {0,0,0};            // Jostick center
 int16_t encoffset[TOTALAXIS] = {0,0,0};           // Encorder offset from center (ENCORDER_MAX/2).
 int16_t moverange[TOTALAXIS] = {180,200,100};     // how much encorder value from center.
-
-//int16_t valuemin[TOTALAXIS] = {0,0,0};
-//int16_t valuemax[TOTALAXIS] = {0,0,0};
 uint8_t motorclp[TOTALAXIS] = {96,127,20};        // Max motor force while in range
 uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
 char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
 char    axisname[TOTALAXIS] = { 'X', 'Y', 'Z' };  // Axis name to display in LCD
 Data    sendData;                                 // Data packet between master and slave.
-bool       FFBisWorking;
+bool    FFBisWorking;
 
 //Create LCD instance
 //  SSD1306AsciiAvrI2c oled;
@@ -80,7 +75,7 @@ Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK,
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial); // Leonardo: wait for serial monitor
+  //while (!Serial); // Leonardo: wait for serial monitor
   pinMode(analogpin[0], INPUT_PULLUP);  //Set pin mode for Encorder X
   pinMode(analogpin[1], INPUT_PULLUP);  //Set pin mode for Encorder y
   pinMode(analogpin[2], INPUT_PULLUP);  //Set pin mode for Encorder z
@@ -89,37 +84,30 @@ void setup() {
   button1.begin();
 	button2.begin();
   LoadCalibrationdata();
-//  while( true ){
-  //while( !validcalibrationdata()){
-    unsigned long starttime = millis();
-    int count = 0;
-    Serial.print("Wait user input. Timeout is 20sec.");
-    while( true ){
-      if( button2.pressed()  ){
-        Serial.println("Skip calib.");
-        break;
-      }
-      if( button1.pressed() ){
-        Serial.println("Go calib.");
-        calibration();
-        break;
-      }
-      unsigned long nowtime = millis(); //+ 2000000; //20 sec
-      if( ((nowtime - starttime) / 1000) > count ){
-        Serial.print(".");
-        if( count++ >2 ) break;
-      }
-      //LoadAnalogData();
-      //LCDAnalogData(); // show axis data in LCD
-      delay(10);
+  unsigned long starttime = millis();
+  int count = 0;
+  Serial.print("Wait user input. Timeout is 20sec.");
+  while( true ){
+    if( button2.pressed()  ){
+      Serial.println("Skip calib.");
+      break;
     }
-    if( !validcalibrationdata() ){
-          calibration();
+    if( button1.pressed() ){
+      Serial.println("Go calib.");
+      calibration();
+      break;
     }
-
-//  }
+    unsigned long nowtime = millis(); //+ 2000000; //20 sec
+    if( ((nowtime - starttime) / 1000) > count ){
+      Serial.print(".");
+      if( count++ >2 ) break;
+    }
+    delay(10);
+  }
+  if( !validcalibrationdata() ){
+    calibration();
+  }
   SaveCalibrationdata();
-
   Joystick.setXAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
   Joystick.setYAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
   Joystick.setZAxisRange(JOYSTICK_AXIS_MIN, JOYSTICK_AXIS_MAX);
@@ -128,7 +116,6 @@ void setup() {
   Wire.setWireTimeout(3000 /* us */, true /* reset_on_timeout */);
   FFBisWorking = true;
   Wire.begin();
-
 
 // Needed for FFB to get game FFB data through USB
   cli();
@@ -142,7 +129,7 @@ void setup() {
   sei();
 }
 // Needed for FFB to get game FFB data through USB
-ISR(TIMER3_COMPA_vect){
+ISR(TIMER3_COMPA_vect) {
   Joystick.getUSBPID();
 }
 
@@ -177,12 +164,11 @@ void loop() {
   Joystick.getForce(forces);
 
 //Apply force to each motor.
-  if (Wire.getWireTimeoutFlag())
-  {
-      Wire.clearWireTimeoutFlag();
-      Serial.print("Wire timeout detected. Disable FFB");
-      digitalWrite(PIN_LED,HIGH);   // Turn on onboard LED
-      FFBisWorking = false;
+  if (Wire.getWireTimeoutFlag()){
+    Wire.clearWireTimeoutFlag();
+    Serial.print("Wire timeout detected. Disable FFB");
+    digitalWrite(PIN_LED,HIGH);   // Turn on onboard LED
+    FFBisWorking = false;
   }
   if(FFBisWorking){
     for(uint8_t i=0; i<TOTALAXIS;i++){
@@ -232,23 +218,14 @@ void calibration() {
 
 int myAnalogRead( int i) {
   int readval = analogRead( analogpin[i] );
-//    Serial.print("\t[");
-//    Serial.print(readval);
   int x = readval - encoffset[i];  // s=100 offset=-411 / s=611 -> x=1022-1022=0 /s=612 -> x=1023-1022=1 
   if( x > EncorderHalf ){
     x = x - EncorderHalf - 1;
   }else if(x <- EncorderHalf){
     x = x + EncorderHalf + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
   }
-//    Serial.print("\t");
-//    Serial.print(encoffset[i]);
-//    Serial.print("\t");
-//    Serial.print(x);
-//    Serial.print("]");
-    return x;
+  return x;
 }
-
-
 
 bool validcalibrationdata(void) {
   for (int i = 0; i < TOTALAXIS; i++) {

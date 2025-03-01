@@ -136,7 +136,7 @@ void loop(){
       Serial.print( newData[i].force );
       // Dir was Changed.
       inProc[i] = true;
-      if( oldData[i].dir == LEFT ){
+      if( oldData[i].dir == LEFT ){c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\PIDReportHandler.h c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\PIDReportType.h c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\DynamicHID.cpp c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\DynamicHID.h c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\PIDReportHandler.cpp
         LPWM_Instance[i]->setPWM_manual( LPWM_Pins[i], 0 ); //Stop PWM
         LPWM_Instance[i]->setPWM();
         delayMicroseconds(100);

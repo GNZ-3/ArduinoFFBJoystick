@@ -366,7 +366,7 @@ Joystick_::Joystick_(
 		tempHidReportDescriptor[hidReportDescriptorSize++] = 0xc0;
 		
 	} // X, Y, Z, Rx, Ry, and Rz Axis	
-	
+	//c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\PIDReportType.h  //gnz
 	if (simulationCount > 0) {
 	
 		// USAGE_PAGE (Simulation Controls)
@@ -604,7 +604,7 @@ void Joystick_::forceCalculator(int32_t* forces) {
       forces[0] += (int32_t)(getEffectForce(effect, m_gains[0], m_effect_params[0], 0));
       forces[1] += (int32_t)(getEffectForce(effect, m_gains[1], m_effect_params[1], 1));
       forces[2] += (int32_t)(getEffectForce(effect, m_gains[1], m_effect_params[1], 2));  //gnz
-      //forces[2] = forces[1]; 
+      //forces[2] = forces[1]; //GNZ
     }
   }
 	forces[0] = (int32_t)((float)1.0 * forces[0] * m_gains[0].totalGain / 10000); // each effect gain * total effect gain = 10000
