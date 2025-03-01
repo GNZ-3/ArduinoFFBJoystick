@@ -1,11 +1,13 @@
 # ArduinoFFBJoystick
 (日本語)
 【概要】
+
 War Thunderゲーム用の2軸フォースフィードバックジョイスティックです。
 Arduino LeonaldとMegaの２つのコントローラを使います。
 Arduino LeonaldをHIDデバイスととして設定し、モータ制御はMegaが担当します。
 Megaを利用する理由は、PWM用のタイマが３個以上利用できるので将来Z軸にも対応するためです。
 2軸だけであれば、安価なUnoでも利用できると思います。
+
 
 
 【コンパイル】
@@ -25,6 +27,16 @@ https://github.com/GNZ-3/MegaSlave
 AVR_PWM
 または、以下からダウンロードしてライブラリをインストールします
 https://github.com/khoih-prog/AVR_PWM
+
+【部品】
+Arduino Leonald x1
+Arduino Mega2560 x1
+AS5600 position sensor x2
+BTS7960 43A H bridge Motor Driver x2
+Xinda Xd3D30-12GnDC Geared Motor 減速比30、110RPM x2
+（試験のため私の場合、１つはXD2D15-12GN-21Sを利用しています）
+
+
 
 【接続図】
 ![Schema](https://github.com/GNZ-3/ArduinoFFBJoystick/blob/main/Misc/ArduiniFFBJoystick.png)
@@ -59,6 +71,15 @@ https://github.com/GNZ-3/MegaSlave
 Extract it to your own Arduino folder(Documents\Arduino\)
 Install below from Library Manager in IDE
 AVR_PWM
+
+[BOM]
+【部品】
+Arduino Leonald x1
+Arduino Mega2560 x1
+AS5600 position sensor x2
+BTS7960 43A H bridge Motor Driver x2
+Xinda Xd3D30-12GnDC Geared Motor gear ratio 30, 110RPM x2
+( For testing purpose, I am using  XD2D15-12GN-21S as Y axis instead.）
 
 
 [Special thanks]
