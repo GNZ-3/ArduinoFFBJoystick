@@ -26,7 +26,7 @@ AVR_PWM
 https://github.com/khoih-prog/AVR_PWM
 
 【接続図】
-![Schema](misc\ArduiniFFBJoystick.png)
+![Schema](https://github.com/GNZ-3/ArduinoFFBJoystick/blob/main/Misc/ArduiniFFBJoystick.png)
 
 
 謝辞
