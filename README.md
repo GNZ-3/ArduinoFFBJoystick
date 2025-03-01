@@ -73,14 +73,12 @@ Install below from Library Manager in IDE
 AVR_PWM
 
 [BOM]
-【部品】
 Arduino Leonald x1
 Arduino Mega2560 x1
 AS5600 position sensor x2
 BTS7960 43A H bridge Motor Driver x2
 Xinda Xd3D30-12GnDC Geared Motor gear ratio 30, 110RPM x2
 ( For testing purpose, I am using  XD2D15-12GN-21S as Y axis instead.）
-
 
 [Special thanks]
 York Law's greate FFB library.
