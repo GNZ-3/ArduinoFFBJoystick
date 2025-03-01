@@ -25,6 +25,9 @@ AVR_PWM
 または、以下からダウンロードしてライブラリをインストールします
 https://github.com/khoih-prog/AVR_PWM
 
+【接続図】
+![misc\ArduiniFFBJoystick.png]
+
 
 謝辞
 York Lawさんの偉大なFFBライブラリです。これがなかったら完成できませんでした。
