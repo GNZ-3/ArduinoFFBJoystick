@@ -51,7 +51,7 @@ int32_t forces[TOTALAXIS]   = {0,0,0};            // For FFB
 int16_t value[TOTALAXIS]    = {0,0,0};            // Encorder value
 int16_t valueproc[TOTALAXIS]= {0,0,0};            // Joystick axis value clipped by valuemin/valuemax
 int16_t encoffset[TOTALAXIS] = {0,0,0};           // Encorder offset from center (ENCORDER_MAX/2).
-int16_t moverange[TOTALAXIS] = {180,200,100};     // how much encorder value from center.
+int16_t moverange[TOTALAXIS] = {160,160,100};     // how much encorder value from center.
 uint8_t motorclp[TOTALAXIS] = {96,127,20};        // Max motor force while in range
 uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
 char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
@@ -177,7 +177,7 @@ void loop() {
       sendData.axis = i;
       if(value[i] != valueproc[i]){
         // if sensor read value is different than process value, joystick posotion is exceeded HW limit. Need strong reverse force. 
-        sendData.force =(uint8_t) constrain( motorclp[i] + pow( value[i] - valueproc[i],2 ),0,motormax[i] ); //Generate force from clip & exceeded.
+        sendData.force =(uint8_t) constrain( motorclp[i] + 0.25*pow( value[i] - valueproc[i],2 ),0,motormax[i] ); //Generate force from clip & exceeded.
         sendData.dir = (valueproc[i] > 0 )? RIGHT:LEFT; 
         Serial.print("\tLIMIT:" +  (String)axisname[i] + "\t" );
         Serial.print( sendData.force );
