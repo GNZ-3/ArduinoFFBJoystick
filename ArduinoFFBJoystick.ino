@@ -5,47 +5,41 @@
 // センタスプリングの追加（ツール起動だけでOK?）
 // パラメータチューニング（スプリング強度、フリクション、センター）用の切替スイッチと調整用ロータリーエンコーダの追加
 #include <digitalWriteFast.h>
-#include <EEPROM.h>               // For save an axis data
-#include <Wire.h>                 // For i2c communication
-#include "Joystick.h"             // FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
-//#include "SSD1306Ascii.h"         // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-//#include "SSD1306AsciiAvrI2c.h"   // Same as above
-//#include "SSD1306Ascii.h"       // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-//#include "SSD1306AsciiAvrI2c.h"   // LCD Driver:   https://github.com/greiman/SSD1306Ascii
-#include <Button.h>               // Button class https://github.com/madleech/Button
-#define PIN_BTN1        2         //Joystick bnutton 1
-#define PIN_BTN2        3         //Joystick bnutton 2
+#include <EEPROM.h>                     // For save an axis data
+#include <Wire.h>                       // For i2c communication
+#include "Joystick.h"                   // FFB Joystick: https://github.com/YukMingLaw/ArduinoJoystickWithFFBLibrary.git
+//#include "SSD1306Ascii.h"             // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+//#include "SSD1306AsciiAvrI2c.h"       // Same as above
+//#include "SSD1306Ascii.h"             // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+//#include "SSD1306AsciiAvrI2c.h"       // LCD Driver:   https://github.com/greiman/SSD1306Ascii
+#include <Button.h>                     // Button class https://github.com/madleech/Button
+#define PIN_BTN1        2               //Joystick bnutton 1
+#define PIN_BTN2        3               //Joystick bnutton 2
 #define PIN_LED         13
-#define I2C_ADD_SSD1306 0x3C      // I2C address for SSD1306 LCD
-#define I2C_ADD_SLAVE   0x8       // I2C address for Slave mega2560
-#define I2C_ADD_MASTER  0x9       // I2C address for master leonald
+#define I2C_ADD_SSD1306 0x3C            // I2C address for SSD1306 LCD
+#define I2C_ADD_SLAVE   0x8             // I2C address for Slave mega2560
+#define I2C_ADD_MASTER  0x9             // I2C address for master leonald
 #define JOYSTICK_AXIS_MIN     INT16_MIN // -32767
 #define JOYSTICK_AXIS_MAX     INT16_MAX // 32768
-#define ENCORDER_MAX          1023 // 10 bit (0-1023)
+#define ENCORDER_MAX          1023      // 10 bit (0-1023)
+#define ENCORDER_HALF  ENCORDER_MAX>1
 
-#define FORCE_MIN       -250      //
-#define FORCE_MAX       250       //
-#define TOTALAXIS       3         // Which means x,y and z axis
-#define LEFT            0         // Motor direction on BTS7960 board
-#define RIGHT           1         // Motor direction on BTS7960 board
+#define FORCE_MIN       -250            //
+#define FORCE_MAX       250             //
+#define TOTALAXIS       3               // 3=x,y and z. set 2 if you do not have Z axis
+#define LEFT            0               // Motor direction on BTS7960 board
+#define RIGHT           1               // Motor direction on BTS7960 board
 
-struct Data{
-  byte cmd;           // Command char from master to slave only
-  byte axis;          // 0=x,1=y,2=z
-  byte dir;           // LEFT or RIGHT
-  uint8_t force;      // 0-250
-};
-enum Status {
-  Center,
-  TopLeft,
-  BottomRight,
-  ApplyForce,
-  End,
-  Aboart
+struct Data{                            // I2C packet structure between master and slave.
+  byte cmd;                             // Not using
+  byte axis;                            // 0=X, 1=Y, 2=Z
+  byte dir;                             // LEFT=0 or RIGHT=1 
+  uint8_t force;                        // abs value of force. So the range is 0-FORCE_MAX (not FORCE_MIN-FORCE_MAX)
 };
 
-int32_t EncorderHalf = ENCORDER_MAX>1;
-Gains   gains[TOTALAXIS];                           // For FFB
+
+
+Gains   gains[TOTALAXIS];                         // For FFB
 EffectParams effectparams[TOTALAXIS];             // For FFB
 int32_t forces[TOTALAXIS]   = {0,0,0};            // For FFB
 int16_t value[TOTALAXIS]    = {0,0,0};            // Encorder value
@@ -87,10 +81,16 @@ void setup() {
   unsigned long starttime = millis();
   int count = 0;
   Serial.print("Wait user input. Timeout is 20sec.");
-  while( true ){
-    if( button2.pressed()  ){
-      Serial.println("Skip calib.");
-      break;
+  while( count <5 ){
+    if( button2.pressed() ){
+      if( !validcalibrationdata() ){
+        Serial.println("Skip calib. Centering joystick.");
+        
+        break;
+      }else{
+        Serial.println("Can not skip calib.");
+        break;
+      }
     }
     if( button1.pressed() ){
       Serial.println("Go calib.");
@@ -99,8 +99,8 @@ void setup() {
     }
     unsigned long nowtime = millis(); //+ 2000000; //20 sec
     if( ((nowtime - starttime) / 1000) > count ){
+      count++;
       Serial.print(".");
-      if( count++ >2 ) break;
     }
     delay(10);
   }
@@ -177,7 +177,9 @@ void loop() {
       sendData.axis = i;
       if(value[i] != valueproc[i]){
         // if sensor read value is different than process value, joystick posotion is exceeded HW limit. Need strong reverse force. 
-        sendData.force =(uint8_t) constrain( motorclp[i] + 0.25*pow( value[i] - valueproc[i],2 ),0,motormax[i] ); //Generate force from clip & exceeded.
+        int force = 0.5*pow( value[i] - valueproc[i],2); //Generate force from clip & exceeded.
+        if(forces[i] != 0) force += motorclp[i];
+        sendData.force =(uint8_t) constrain( force,0,motormax[i] ); //Generate force from clip & exceeded.
         sendData.dir = (valueproc[i] > 0 )? RIGHT:LEFT; 
         Serial.print("\tLIMIT:" +  (String)axisname[i] + "\t" );
         Serial.print( sendData.force );
@@ -208,7 +210,6 @@ void calibration() {
   for (int i = 0; i < TOTALAXIS; i++) {
     encoffset[i] =0;
     encoffset[i] =  analogRead(i) ;   // 0-1023 -> 511
-    //以後、1024以上なら1024を引く、マイナスなら１０２4を足す
     Serial.print("\tOffset");
     Serial.print(i);
     Serial.print("\t");
@@ -219,10 +220,10 @@ void calibration() {
 int myAnalogRead( int i) {
   int readval = analogRead( analogpin[i] );
   int x = readval - encoffset[i];  // s=100 offset=-411 / s=611 -> x=1022-1022=0 /s=612 -> x=1023-1022=1 
-  if( x > EncorderHalf ){
-    x = x - EncorderHalf - 1;
-  }else if(x <- EncorderHalf){
-    x = x + EncorderHalf + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
+  if( x > ENCORDER_HALF ){
+    x = x - ENCORDER_HALF - 1;
+  }else if(x <- ENCORDER_HALF){
+    x = x + ENCORDER_HALF + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
   }
   return x;
 }
@@ -241,13 +242,9 @@ bool validcalibrationdata(void) {
 
 // Load calibration date from EEPROM
 void LoadCalibrationdata(){
-  EEPROM.get(0,encoffset);
-//  EEPROM.get(sizeof(valuemin),valuecen);
-//  EEPROM.get(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
+    EEPROM.get(0,encoffset);
 }
 // Update calibration date to EEPROM if changed
 void SaveCalibrationdata(){
-  //EEPROM.update(0,encoffset);
-//  EEPROM.put(sizeof(valuemin),valuecen);
-//  EEPROM.put(sizeof(valuemin)+sizeof(valuecen) ,valuemax);
+    EEPROM.put(0,encoffset);
 }
