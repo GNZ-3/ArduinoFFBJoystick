@@ -1,9 +1,7 @@
 // Update board ID:%userprofile%\AppData\Local\Arduino15\packages\arduino\hardware\avr\1.8.6
-// 起動時に各軸をキャリブレーション、GUIの追加
-// X軸詳細化(タイミングプーリ購入）
-// カルマンフィルタの追加
-// センタスプリングの追加（ツール起動だけでOK?）
-// パラメータチューニング（スプリング強度、フリクション、センター）用の切替スイッチと調整用ロータリーエンコーダの追加
+// ゲーム内でZ軸とX軸を入れ替えてZ軸のFFBデータ有無を確認->J2M試製雷電の離陸でラダー軸になったこをと確認してFFBがあることを確認
+// Z軸のFFBが有る場合、レポートとFFB受信データの問題と思われる
+// 無い場合はエルロン軸と旋回計のボールから算出する（不要）
 #include <digitalWriteFast.h>
 #include <EEPROM.h>                     // For save an axis data
 #include <Wire.h>                       // For i2c communication
@@ -21,8 +19,8 @@
 #define I2C_ADD_MASTER  0x9             // I2C address for master leonald
 #define JOYSTICK_AXIS_MIN     INT16_MIN // -32767
 #define JOYSTICK_AXIS_MAX     INT16_MAX // 32768
-#define ENCORDER_MAX          1023      // 10 bit (0-1023)
-#define ENCORDER_HALF  ENCORDER_MAX>1
+//#define ENCORDER_MAX          1023      // 10 bit (0-1023) each encoder has own min/max value
+//#define ENCORDER_HALF  ENCORDER_MAX/2
 
 #define FORCE_MIN       -250            //
 #define FORCE_MAX       250             //
@@ -44,8 +42,10 @@ EffectParams effectparams[TOTALAXIS];             // For FFB
 int32_t forces[TOTALAXIS]   = {0,0,0};            // For FFB
 int16_t value[TOTALAXIS]    = {0,0,0};            // Encorder value
 int16_t valueproc[TOTALAXIS]= {0,0,0};            // Joystick axis value clipped by valuemin/valuemax
-int16_t encoffset[TOTALAXIS] = {0,0,0};           // Encorder offset from center (ENCORDER_MAX/2).
-int16_t moverange[TOTALAXIS] = {160,160,100};     // how much encorder value from center.
+int16_t encoffset[TOTALAXIS]= {0,0,0};            // Encorder offset from center (ENCORDER_MAX/2).
+int16_t encMax[TOTALAXIS]   = {1023,1020,1023};   // Actual max value of your encorder
+int16_t encMin[TOTALAXIS]   = {19,17,19};         // Actual min value of your encorder
+int16_t moverange[TOTALAXIS] = {400,200,200};     // how much encorder value from center.
 uint8_t motorclp[TOTALAXIS] = {96,127,20};        // Max motor force while in range
 uint8_t motormax[TOTALAXIS] = {127,255,50};       // Max mortor force that can apply to motor 
 char    analogpin[TOTALAXIS]= {A0,A1,A2};         // Encorder PIN
@@ -77,7 +77,7 @@ void setup() {
   digitalWrite(PIN_LED,LOW);   // Turn off onboard LED
   button1.begin();
 	button2.begin();
-  LoadCalibrationdata();
+  //LoadCalibrationdata();
   unsigned long starttime = millis();
   int count = 0;
   Serial.print("Wait user input. Timeout is 20sec.");
@@ -163,7 +163,7 @@ void loop() {
   Joystick.setEffectParams(effectparams);
   Joystick.getForce(forces);
 
-//Apply force to each motor.
+//Send force data to Slave Mega2560.
   if (Wire.getWireTimeoutFlag()){
     Wire.clearWireTimeoutFlag();
     Serial.print("Wire timeout detected. Disable FFB");
@@ -179,7 +179,7 @@ void loop() {
         // if sensor read value is different than process value, joystick posotion is exceeded HW limit. Need strong reverse force. 
         int force = 0.5*pow( value[i] - valueproc[i],2); //Generate force from clip & exceeded.
         if(forces[i] != 0) force += motorclp[i];
-        sendData.force =(uint8_t) constrain( force,0,motormax[i] ); //Generate force from clip & exceeded.
+        sendData.force =(uint8_t) constrain( force,0,motormax[i] );
         sendData.dir = (valueproc[i] > 0 )? RIGHT:LEFT; 
         Serial.print("\tLIMIT:" +  (String)axisname[i] + "\t" );
         Serial.print( sendData.force );
@@ -218,12 +218,12 @@ void calibration() {
 }
 
 int myAnalogRead( int i) {
-  int readval = analogRead( analogpin[i] );
-  int x = readval - encoffset[i];  // s=100 offset=-411 / s=611 -> x=1022-1022=0 /s=612 -> x=1023-1022=1 
-  if( x > ENCORDER_HALF ){
-    x = x - ENCORDER_HALF - 1;
-  }else if(x <- ENCORDER_HALF){
-    x = x + ENCORDER_HALF + 1;              //  s=0 x=0+411=411       s=1022 x=1022+411+1=1433->412 
+  int readval =constrain( analogRead( analogpin[i] ),encMin[i],encMax[i] );
+  int x = readval - encoffset[i];
+  if( x > (encMax[i]-encMin[i])/2 ){
+    x = x - encMax[i] - 1 + encMin[i];
+  }else if(x < -(encMax[i]-encMin[i])/2){
+    x = x + encMax[i] + 1 - encMin[i];
   }
   return x;
 }
