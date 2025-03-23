@@ -1,0 +1,16 @@
+Enumerated Joystick : My FFB Controller1
+Supported Effects : 
+   - GUID_ConstantForce
+   - GUID_RampForce
+   - GUID_Square
+   - GUID_Sine
+   - GUID_Triangle
+   - GUID_SawtoothUp
+   - GUID_SawtoothDown
+   - GUID_Spring
+   - GUID_Damper
+   - GUID_Inertia
+   - GUID_Friction
+   - GUID_CustomForce
+
+Creating effects for My FFB Controller1
