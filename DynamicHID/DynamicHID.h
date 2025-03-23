@@ -37,6 +37,8 @@
   #include "PluggableUSB.h"
 #endif
 
+#include "PIDReportHandler.h"
+
 #if defined(USBCON)
 
 #define _USING_DYNAMIC_HID
@@ -73,6 +75,11 @@
 #define DYNAMIC_HID_REPORT_TYPE_OUTPUT  2
 #define DYNAMIC_HID_REPORT_TYPE_FEATURE 3
 
+#define PID_ENPOINT_COUNT 2
+
+#define PID_ENDPOINT_IN	 (pluggedEndpoint)
+#define PID_ENDPOINT_OUT (pluggedEndpoint+1)
+
 typedef struct
 {
   uint8_t len;      // 9
@@ -91,15 +98,18 @@ typedef struct
   InterfaceDescriptor hid;
   DYNAMIC_HIDDescDescriptor   desc;
   EndpointDescriptor  in;
+  EndpointDescriptor  out;
 } DYNAMIC_HIDDescriptor;
 
 class DynamicHIDSubDescriptor {
 public:
   DynamicHIDSubDescriptor *next = NULL;
-  DynamicHIDSubDescriptor(const void *d, const uint16_t l, const bool ipm = true) : data(d), length(l), inProgMem(ipm) { }
+  DynamicHIDSubDescriptor(const void *d, const uint16_t l, const void* pid_d, const uint16_t pid_l, const bool ipm = true) : data(d), length(l),pid_data(pid_d), pid_length(pid_l), inProgMem(ipm) { }
 
   const void* data;
+  const void* pid_data;
   const uint16_t length;
+  const uint16_t pid_length;
   const bool inProgMem;
 };
 
@@ -108,23 +118,25 @@ class DynamicHID_ : public PluggableUSBModule
 public:
   DynamicHID_(void);
   int begin(void);
+  bool usb_Available();
   int SendReport(uint8_t id, const void* data, int len);
+  int RecvData(byte* data);
+  void RecvfromUsb();
   void AppendDescriptor(DynamicHIDSubDescriptor* node);
+  PIDReportHandler pidReportHandler;
 
 protected:
   // Implementation of the PluggableUSBModule
   int getInterface(uint8_t* interfaceCount);
   int getDescriptor(USBSetup& setup);
+  bool GetReport(USBSetup& setup);
+  bool SetReport(USBSetup& setup);
   bool setup(USBSetup& setup);
   uint8_t getShortName(char* name);
 
 private:
-  #ifdef _VARIANT_ARDUINO_DUE_X_
-  uint32_t epType[1];
-  #else
-  uint8_t epType[1];
-  #endif
-
+  uint8_t epType[2];
+  uint8_t out_ffbdata[64];
   DynamicHIDSubDescriptor* rootNode;
   uint16_t descriptorSize;
 
@@ -137,7 +149,7 @@ private:
 // https://isocpp.org/wiki/faq/ctors#static-init-order-on-first-use
 DynamicHID_& DynamicHID();
 
-#define D_HIDREPORT(length) { 9, 0x21, 0x01, 0x01, 0, 1, 0x22, lowByte(length), highByte(length) }
+#define D_HIDREPORT(length) { 9, 0x21, 0x11, 0x01, 0, 1, 0x22, lowByte(length), highByte(length) }
 
 #endif // USBCON
 

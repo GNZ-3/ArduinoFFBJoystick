@@ -4,7 +4,7 @@ PIDReportHandler::PIDReportHandler()
 {
 	nextEID = 1;
 	devicePaused = 0;
-}c:\Users\LocalAdmin\Documents\Arduino\libraries\DynamicHID\DynamicHID.cpp
+}
 
 PIDReportHandler::~PIDReportHandler() 
 {

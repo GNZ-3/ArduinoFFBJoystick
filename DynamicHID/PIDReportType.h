@@ -47,26 +47,20 @@ typedef struct//PID state
 
 ///Host-->Device
 
-//gnz DIEFFECT https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee416616(v=vs.85)
 typedef struct //FFB: Set Effect Output Report
 {
-//dwflags
-//lpEnvelope
-//cbTypeSpecificParams
-//lpvTypeSpecificParams
-
 	uint8_t	reportId;	// =1
 	uint8_t	effectBlockIndex;	// 1..40
 	uint8_t	effectType;	// 1..12 (effect usages: 26,27,30,31,32,33,34,40,41,42,43,28)
-	uint16_t duration; // 0..32767 ms                 dwDuration
-	uint16_t triggerRepeatInterval; // 0..32767 ms    dwTriggerRepeatinterval
-	uint16_t samplePeriod;	// 0..32767 ms            dwSamplePPriod
-	uint8_t	gain;	// 0..255	 (physical 0..10000)      dwGain
-	uint8_t	triggerButton;	// button ID (0..8)       dwTriggerbutton
-	uint8_t	enableAxis; // bits: 0=X, 1=Y, 2=DirectionEnable    cAxes??
-	uint8_t	directionX;	// angle (0=0 .. 255=360deg)            rgdwAxes??
-	uint8_t	directionY;	// angle (0=0 .. 255=360deg)            rglDirection??
-	//	uint16_t	startDelay;	// 0..32767 ms                    dwStartDelay why comment out?
+	uint16_t duration; // 0..32767 ms
+	uint16_t triggerRepeatInterval; // 0..32767 ms
+	uint16_t samplePeriod;	// 0..32767 ms
+	uint8_t	gain;	// 0..255	 (physical 0..10000)
+	uint8_t	triggerButton;	// button ID (0..8)
+	uint8_t	enableAxis; // bits: 0=X, 1=Y, 2=DirectionEnable
+	uint8_t	directionX;	// angle (0=0 .. 255=360deg)
+	uint8_t	directionY;	// angle (0=0 .. 255=360deg)
+	//	uint16_t	startDelay;	// 0..32767 ms
 } USB_FFBReport_SetEffect_Output_Data_t;
 
 typedef struct//FFB: Set Envelope Output Report
