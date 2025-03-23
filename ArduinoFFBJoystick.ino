@@ -2,6 +2,8 @@
 // ゲーム内でZ軸とX軸を入れ替えてZ軸のFFBデータ有無を確認->J2M試製雷電の離陸でラダー軸になったこをと確認してFFBがあることを確認
 // Z軸のFFBが有る場合、レポートとFFB受信データの問題と思われる
 // 無い場合はエルロン軸と旋回計のボールから算出する（不要）
+
+//update test message
 #include <digitalWriteFast.h>
 #include <EEPROM.h>                     // For save an axis data
 #include <Wire.h>                       // For i2c communication
